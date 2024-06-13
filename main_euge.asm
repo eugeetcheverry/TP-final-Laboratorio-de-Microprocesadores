@@ -5,7 +5,7 @@
 ;b = etapa 2
 ;c = etapa 3
 ;d = espera
-.def rleds = r18 ; rrrr vvvv :nibble bajo leds verdes, nibble alto leds rojos
+.def rleds = r18 ; vvvv rrrr :nibble alto leds verdes, nibble bajo leds rojos
 .def contador_tabla = r19
 .def radc = r20
 
@@ -15,6 +15,10 @@
 
 TABLA: .byte 10
 NUM_ELEGIDO: .byte 2
+;parte alta del primer byte -> primer digito
+;parte baja del primer byte -> segundo digito
+;parte alta del segundo byte -> tercer digito
+;parte baja del primer byte -> cuarto digito
 
 .cseg
 
@@ -95,6 +99,30 @@ chequeo_etapa:
 	rjmp loop_wait
 	rjmp loop_wait ;En el caso que no este nada seteado
 
+interrupcion_etapa1:
+	sbic USRC0A, 7 ;FLAG RX
+	rcall comparo_con_N
+	rcall led_titilando ;espero 3 segundos con los leds titilando
+	andi rflag, 0b00000010 ;paso a etapa 2
+	sbic PIND, 2;veo si la interrupcion entro por int0
+	rcall envio_N
+	rjmp fin_interrupcion
+
+envio_N:
+	ldi r16, 78
+	sts UDR0, r16
+	ldi r16, 0x20; activo el bit UDRIE
+	or USCR0B, r16; activo la interrupcion
+	ret
+
+comparo_con_N:
+	lds r16, UDR0
+	cpi r16, 78 ;Comparo con N
+	sbic sreg, 2
+	rjmp fin_interrupcion
+	ret
+
+
 eligiendo_numero:
 
 	;Inicializo puntero a tabla
@@ -149,46 +177,34 @@ joystick:
 	brlo dec_joystick
 	rjmp fin_interrupcion
 
+interrupcion_pushbtm2:
+	
+
 inc_joystick:
 	inc contador_tabla
 	st r16, X+
 	sbic r16, 1
-	rjmp fin_interrupcion
+	rjmp fin_interrupcion  ;tenemos que adelantar el puntero hasta el proximo cero                  
 	inc contador_tabla
 	cpi contador_tabla, 10
 	breq 
 	st r16, X+
+	out PORTB, contador_tabla
+	out PORTC, rleds ; guardo el digido
+	reti
 
 dec_joystick:
-
-
-interrupcion_push_btm: ;veo en que etapa estoy
-	sbic rflag, 0
-	rjmp interrupcion_etapa1
-	rjmp interrupcion_etapa2
-
-interrupcion_etapa1:
-	sbic USRC0A, 7 ;FLAG RX
-	rcall comparo_con_N
-	rcall led_titilando ;espero 3 segundos con los leds titilando
-	andi rflag, 0b00000010 ;paso a etapa 2
-	sbic PIND, 2;veo si la interrupcion entro por int0
-	rcall envio_N
-	rjmp fin_interrupcion
-
-envio_N:
-	ldi r16, 78
-	sts UDR0, r16
-	ldi r16, 0x20; activo el bit UDRIE
-	or USCR0B, r16; activo la interrupcion
-	ret
-
-comparo_con_N:
-	lds r16, UDR0
-	cpi r16, 78 ;Comparo con N
-	sbic sreg, 2
-	rjmp fin_interrupcion
-	ret
+	dec contador_tabla
+	st r16, X+
+	sbic r16, 1
+	rjmp fin_interrupcion    ;tenemos que adelantar el puntero hasta el proximo cero                
+	dec contador_tabla
+	cpi contador_tabla, 10
+	breq 
+	st r16, X+
+    out PORTB, contador_tabla
+	out PORTC, rleds ; guardo el digido
+	reti
 
 leds_titilando:
 	ret	
@@ -200,9 +216,15 @@ envio_j:
 	or USCR0B, r16; activo la interrupcion
 	ret
 
+interrupcion_push_btm: ;veo en que etapa estoy
+	sbic rflag, 1
+	rjmp interrupcion_etapa1
+	rjmp interrupcion_pushbtm2
+
 transmision_de_dato:
 	rjmp fin_interrupcion
 
 fin_interrupcion: 
 	reti
 
+/*Etapa juego : eliminar las interrupciones por push btm y int0
