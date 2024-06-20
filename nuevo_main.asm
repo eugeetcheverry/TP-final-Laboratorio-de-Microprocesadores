@@ -36,7 +36,7 @@ NUM_JUGANDO: .byte 4
 
 ;Sector de interrupciones por INT0
 .org INT0addr
-	rjmp int_push_btm
+	rjmp int_int0
 
 ;Sector de interrupciones USART
 .org URXCaddr
@@ -150,7 +150,7 @@ pasar_eligiendo_numero:
 
 limpiar_tabla:
 	ldi r16, 0
-	st X+, 0
+	st X+, r16
 	inc contador_tabla
 	cpi contador_tabla, 9
 	in aux_SREG, sreg
@@ -373,7 +373,6 @@ int_adc:
 	clr flag_int
 	rjmp movimiento_joystick
 	reti
-
 
 int_timer:
 	clr flag_int
