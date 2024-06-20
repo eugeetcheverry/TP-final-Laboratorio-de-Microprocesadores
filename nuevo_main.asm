@@ -19,6 +19,8 @@
 .def aux_joystick = r24
 .def aux_SREG = r23
 
+.equ max_valor = 1
+.equ min_valor = 2
 .dseg
 
 .org SRAM_START
@@ -198,7 +200,7 @@ movimiento_joystick:
 	in aux_SREG, sreg
 	sbrc aux_SREG, 0 ;Busque que testea brlo y es el flag del carry
 	rcall es_dec
-	ret
+	reti
 
 es_inc:
 	;Espero 30ms para ver si hay un deceremento
@@ -226,7 +228,7 @@ incremento:
 	cpi contador_tabla, 10
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	rjmp paso_inicio_de_tabla
+	rjmp paso_inicio_tabla
 	ld r16, X+
 	sbrc r16, 0
 	rcall muevo_puntero_inc
@@ -303,7 +305,22 @@ pasar_juego:
 
 ;FUNCION LED_TITILANDO--------------------------------------------------
 led_titilando:
-	
+	;timer de 3s
+	ldi r16, 0b10000010
+	out TCCR0A, r16
+
+	ldi r16, 237 ; top con prescaler de 1024
+	out OCR0A, r16
+
+	ldi r16, 0b00000101
+	out TCCR0B, r16 ; cuando seteamos el prescaler 64 arranca a contar
+	timer_loop:
+	sbis TIFR0, 1
+	rjmp timer_loop
+	apago_timer:
+	clr r16
+	out TCCR0B, r16
+
 	ret
 ;FUNCION TIMER----------------------------------------------------------
 timer_30ms:
@@ -332,21 +349,9 @@ int_usart_tx:
 	reti
 
 int_adc:
-	clr flag_int
-	lds r16, ADCH
-	cpi r16, valor_max
-	brsh int_ad_inc
-	cpi r16, valor_min
-	brlo int_adc_dec
+	rjmp movimiento_joystick
 	reti
 
-int_adc_inc:
-	sbr flag_int, 3
-	reti
-
-int_adc_dec:
-	sbr flag_int, 3
-	reti
 
 int_timer:
 	clr flag_int
