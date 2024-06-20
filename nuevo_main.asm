@@ -84,14 +84,6 @@ main:
 	ldi r16, 0b11011000
 	sts UCSR0B, r16  
 
-	;Seteo interrupcion por: TIMER
-	; Configuro el timer 0
-	ldi r16, 0b10000010
-	out TCCR0A, r16
-
-	ldi r16, 237 ; top con prescaler de 1024
-	out OCR0A, r16
-
 	sei
 
 chequeo_etapa:
@@ -306,6 +298,7 @@ pasar_juego:
 ;FUNCION LED_TITILANDO--------------------------------------------------
 led_titilando:
 	;timer de 3s por overflow, 
+	cli
 	ldi r16, 0b10000010
 	out TCCR0A, r16
 	ldi r16, 0b10000010
@@ -313,7 +306,7 @@ led_titilando:
 
 	ldi r16, 0xff ; top con prescaler de 1024
 	out OCR0A, r16
-
+	sei
 	ldi r16, 0b00000101
 	out TCCR0B, r16 ; cuando seteamos el prescaler 64 arranca a contar
 
@@ -342,6 +335,14 @@ apago_timer_leds:
 
 ;FUNCION TIMER----------------------------------------------------------
 timer_30ms:
+	;Seteo interrupcion por: TIMER
+	; Configuro el timer 0
+	cli
+	ldi r16, 0b10000010
+	out TCCR0A, r16
+	ldi r16, 237 ; top con prescaler de 1024
+	out OCR0A, r16
+	sei
 	ldi r16, 0b00000101
 	out TCCR0B, r16 ; cuando seteamos el prescaler 64 arranca a contar
 timer_loop:
