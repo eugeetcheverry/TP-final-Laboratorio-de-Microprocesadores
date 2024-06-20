@@ -305,22 +305,39 @@ pasar_juego:
 
 ;FUNCION LED_TITILANDO--------------------------------------------------
 led_titilando:
-	;timer de 3s
+	;timer de 3s por overflow, 
+	ldi r16, 0b10000010
+	out TCCR0A, r16
 	ldi r16, 0b10000010
 	out TCCR0A, r16
 
-	ldi r16, 237 ; top con prescaler de 1024
+	ldi r16, 0xff ; top con prescaler de 1024
 	out OCR0A, r16
 
 	ldi r16, 0b00000101
 	out TCCR0B, r16 ; cuando seteamos el prescaler 64 arranca a contar
-	timer_loop:
-	sbis TIFR0, 1
+
+	ldi r16, 95; contador
+	ldi r17, 0b00001010
+	out PORTC, r17
+	out PORTB, r17
+	
+timer_loop_leds:
+	sbic TIFR0, 0
+	inc r16
+	cpi r16, 0
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp apago_timer_leds
+	out PINCC, r17
+	out PIND, r17
 	rjmp timer_loop
-	apago_timer:
+
+apago_timer_leds:
 	clr r16
 	out TCCR0B, r16
-
+	out PORTC, r16
+	out PORTB, r16
 	ret
 ;FUNCION TIMER----------------------------------------------------------
 timer_30ms:
