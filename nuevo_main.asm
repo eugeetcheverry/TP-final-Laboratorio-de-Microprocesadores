@@ -329,7 +329,7 @@ timer_loop_leds:
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	rjmp apago_timer_leds
-	out PINCC, r17
+	out PINC, r17
 	out PIND, r17
 	rjmp timer_loop
 
@@ -339,6 +339,7 @@ apago_timer_leds:
 	out PORTC, r16
 	out PORTB, r16
 	ret
+
 ;FUNCION TIMER----------------------------------------------------------
 timer_30ms:
 	ldi r16, 0b00000101
@@ -353,10 +354,12 @@ apago_timer:
 
 ;INTERRUPCIONES---------------------------------------------------------
 int_int0:
+	clr flag_int
 	sbr flag_int, 0
 	reti
 
 int_usart_rx:
+	clr flag_int
 	sbr flag_int, 1
 	reti
 
@@ -366,6 +369,7 @@ int_usart_tx:
 	reti
 
 int_adc:
+	clr flag_int
 	rjmp movimiento_joystick
 	reti
 
