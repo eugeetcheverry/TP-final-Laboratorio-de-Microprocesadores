@@ -93,17 +93,17 @@ main:
 	sei
 
 chequeo_etapa:
-	sbic flag_e, 0 
+	sbrc flag_e, 0 
 	rcall eligiendo_contrincante
-	sbic flag_e, 1
+	sbrc flag_e, 1
 	rcall eligiendo_numero
 	sbrc flag_e, 2
 	rcall juego
-	rjmp loop_chequeo_etapa
+	rjmp chequeo_etapa
 
 ;ETAPA: ELIGIENDO CONTRINCANTE----------------------------------------------------------------------
-eligiendo_contricante:
-	sbic flag_int, 0
+eligiendo_contrincante:
+	sbrc flag_int, 0
 	rcall push_btm_etapa1
 	sbrc flag_int, 1
 	rcall usart_rx_etapa1
@@ -156,7 +156,7 @@ pasar_eligiendo_numero:
 
 limpiar_tabla:
 	ldi r16, 0
-	ld X+, 0
+	st X+, 0
 	inc contador_tabla
 	cpi contador_tabla, 9
 	in aux_SREG, sreg
@@ -168,7 +168,7 @@ limpiar_tabla:
 ;ETAPA: ELIGIENDO NUMERO--------------------------------------------
 eligiendo_numero:
 	out PORTC, rleds
-	sbic flag_int, 0
+	sbrc flag_int, 0
 	rcall elige_numero
 	sbrc flag_e, 2
 	rcall chequeo_etapa
@@ -181,7 +181,7 @@ eligiendo_numero:
 elige_numero:
 	lsr rleds
 	mov r16, contador_tabla
-	ld Y+, r16
+	st Y+, r16
 	rcall movimiento_joystick
 	inc cont_dgt
 	sbrc cont_dgt, 2
@@ -207,7 +207,7 @@ es_inc:
 	cpi aux_joystick, max_valor
 	in aux_SREG, sreg
 	sbrc aux_SREG, 0 ; si es menor esta limpio el flag del carry
-	sbi flag_int, 3
+	sbr flag_int, 3
 	ret
 
 es_dec:
@@ -217,7 +217,7 @@ es_dec:
 	cpi aux_joystick, min_valor
 	in aux_SREG, sreg
 	sbrs aux_SREG, 0 ; si es menor esta limpio el flag del carry
-	sbi flag_int, 4
+	sbr flag_int, 4
 	ret
 	
 
@@ -248,7 +248,7 @@ muevo_puntero_inc:
 	out PORTB, contador_tabla
 	ret
 
-paso_inicio_de_tabla:
+paso_inicio_tabla:
 	ldi contador_tabla, 0
 	ldi XL, low(TABLA)
 	ldi XH, high(TABLA)
@@ -319,16 +319,16 @@ apago_timer:
 
 ;INTERRUPCIONES---------------------------------------------------------
 int_int0:
-	sbi flag_int, 0
+	sbr flag_int, 0
 	reti
 
 int_usart_rx:
-	sbi flag_int, 1
+	sbr flag_int, 1
 	reti
 
 int_usart_tx:
 	clr flag_int
-	sbi flag_int, 2
+	sbr flag_int, 2
 	reti
 
 int_adc:
@@ -341,14 +341,14 @@ int_adc:
 	reti
 
 int_adc_inc:
-	sbi flag_int, 3
+	sbr flag_int, 3
 	reti
 
 int_adc_dec:
-	sbi flag_int, 3
+	sbr flag_int, 3
 	reti
 
 int_timer:
 	clr flag_int
-	sbi flag_int, 4
+	sbr flag_int, 4
 	reti
