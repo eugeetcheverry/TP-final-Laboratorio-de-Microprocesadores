@@ -78,11 +78,11 @@ main:
 	clr r16
 	sts UBRR0H, r16
 	ldi r16, 0b00100010 ;velocidad doble
-	sts USCR0A, r16
+	sts UCSR0A, r16
 	ldi r16, 0b00000110
-	sts USCR0C, r16
+	sts UCSR0C, r16
 	ldi r16, 0b11011000
-	sts USCR0B, r16  
+	sts UCSR0B, r16  
 
 	;Seteo interrupcion por: TIMER
 	; Configuro el timer 0
