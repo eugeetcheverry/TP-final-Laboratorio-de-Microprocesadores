@@ -16,6 +16,8 @@
 .def cero = r20
 .def rleds = r21
 .def cont_dgt = r22
+.def aux_joystick = r24
+.def aux_SREG = r23
 
 .dseg
 
@@ -81,6 +83,13 @@ main:
 	sts USCR0B, r16  
 
 	;Seteo interrupcion por: TIMER
+	; Configuro el timer 0
+	ldi r16, 0b10000010
+	out TCCR0A, r16
+
+	ldi r16, 237 ; top con prescaler de 1024
+	out OCR0A, r16
+
 	sei
 
 chequeo_etapa:
@@ -103,7 +112,8 @@ eligiendo_contricante:
 usart_rx_etapa1:
 	lds r16, UDR0
 	cpi r16, 78 ;Comparo con N
-	sbrc sreg, 1
+	in aux_SREG, SREG
+	sbrc aux_SREG, 1
 	rcall pasar_eligiendo_numero
 	ret
 
@@ -120,6 +130,9 @@ pasar_eligiendo_numero:
 	;Inicializo puntero a tabla
 	ldi XL, low(TABLA)
 	ldi XH, high(TABLA)
+
+	ldi YL, low(NUM_ELEGIDO)
+	ldi YH, high(NUM_ELEGIDO)
 
 	rcall limpiar_tabla
 
@@ -146,7 +159,8 @@ limpiar_tabla:
 	ld X+, 0
 	inc contador_tabla
 	cpi contador_tabla, 9
-	sbrs sreg, 1
+	in aux_SREG, sreg
+	sbrs aux_SREG, 1
 	rjmp limpiar_tabla
 	clr contador_tabla
 	ret
@@ -167,16 +181,52 @@ eligiendo_numero:
 elige_numero:
 	lsr rleds
 	mov r16, contador_tabla
-	sts NUM_ELEGIDO + cont_dgt, r16
+	ld Y+, r16
+	rcall movimiento_joystick
 	inc cont_dgt
 	sbrc cont_dgt, 2
 	rcall pasar_juego
 	ret
 
+movimiento_joystick:
+	lds aux_joystick, ADCH ;Valor del joystick
+	cpi aux_joystick, max_valor
+	in aux_SREG, sreg
+	sbrs aux_SREG, 0 ;busque que testea brsh y es el glag del carry
+	rcall es_inc
+	cpi aux_joystick, min_valor
+	in aux_SREG, sreg
+	sbrc aux_SREG, 0 ;Busque que testea brlo y es el flag del carry
+	rcall es_dec
+	ret
+
+es_inc:
+	;Espero 30ms para ver si hay un deceremento
+	rcall timer_30ms
+	lds aux_joystick, ADCH
+	cpi aux_joystick, max_valor
+	in aux_SREG, sreg
+	sbrc aux_SREG, 0 ; si es menor esta limpio el flag del carry
+	sbi flag_int, 3
+	ret
+
+es_dec:
+	;Espero 30ms para ver si hay un deceremento
+	rcall timer_30ms
+	lds aux_joystick, ADCH
+	cpi aux_joystick, min_valor
+	in aux_SREG, sreg
+	sbrs aux_SREG, 0 ; si es menor esta limpio el flag del carry
+	sbi flag_int, 4
+	ret
+	
+
 incremento:
 	inc contador_tabla
 	cpi contador_tabla, 10
-	breq 
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp paso_inicio_de_tabla
 	ld r16, X+
 	sbrc r16, 0
 	rcall muevo_puntero_inc
@@ -185,7 +235,9 @@ incremento:
 muevo_puntero_inc:
 	inc contador_tabla
 	cpi contador_tabla, 10
-	breq 
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp paso_inicio_tabla
 	ldi XL, low(TABLA)
 	ldi XH, high(TABLA)
 	add XL, contador_tabla
@@ -196,20 +248,36 @@ muevo_puntero_inc:
 	out PORTB, contador_tabla
 	ret
 
+paso_inicio_de_tabla:
+	ldi contador_tabla, 0
+	ldi XL, low(TABLA)
+	ldi XH, high(TABLA)
+	add XL, contador_tabla
+	adc XH, cero
+	ret
+
+
 decremento:
 	dec contador_tabla
 	cpi contador_tabla, 0
-	breq 
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp paso_fin_tabla
 	ld r16, -X
 	sbrc r16, 0
 	rcall muevo_puntero_dec
 	out PORTB, contador_tabla
 	ret
 
+paso_fin_tabla:
+	ldi contador_tabla, 11
+
 muevo_puntero_dec:
 	dec contador_tabla
 	cpi contador_tabla, 0
-	breq 
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp paso_fin_tabla 
 	ldi XL, low(TABLA)
 	ldi XH, high(TABLA)
 	sub XL, contador_tabla
@@ -232,6 +300,22 @@ pasar_juego:
 	ret
 
 ;ETAPA: JUEGO-----------------------------------------------------------
+
+;FUNCION LED_TITILANDO--------------------------------------------------
+led_titilando:
+	
+	ret
+;FUNCION TIMER----------------------------------------------------------
+timer_30ms:
+	ldi r16, 0b00000101
+	out TCCR0B, r16 ; cuando seteamos el prescaler 64 arranca a contar
+timer_loop:
+	sbis TIFR0, 1
+	rjmp timer_loop
+apago_timer:
+	clr r16
+	out TCCR0B, r16
+	ret
 
 ;INTERRUPCIONES---------------------------------------------------------
 int_int0:
