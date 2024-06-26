@@ -51,6 +51,9 @@ TABLA_JUGANDO: .byte 4
 .org ADCCaddr
 	rjmp int_adc
 
+.org OVF0addr
+	rjmp timer0_anti_rebote
+
 .org INT_VECTORS_SIZE
 
 main:
@@ -59,15 +62,23 @@ main:
 	out spl, r16
 	ldi r16, high(RAMEND)
 
-	; Inicializo los puertos 
+	; Inicializo los puertos de salida
 	ldi r16, 0x0f
 	out DDRC, r16
 	out DDRB, r16
 
+	; Inicializo los puertos de entrada
+	ldi r16, 0x00 
+	out DDRD, r16
+	;Activo el pull-up en INT0(PD2)
+	ldi r16, 0b00000100
+	out PORTD, r16
+
+
 	; Limpio contadores o cosas en general
 	clr rleds
 	clr vleds
-	clr flag_e
+	ldi flag_e, 0b00000001
 	clr r16
 
 	;Seteo las interrupciones
@@ -77,22 +88,30 @@ main:
 	ldi r16,  0x02 ;por flanco descendente 
 	sts EICRA, r16
 	ldi r16, 0x01
-	sts EIMSK, r16
+	out EIMSK, r16
 
 	;Seteo interrupcion por: USART
 	;Recibo datos y envio
-	ldi r16, 0x0c
+	ldi r16, 103
 	sts UBRR0L, r16
 	clr r16
 	sts UBRR0H, r16
-	ldi r16, 0b00100010 ;velocidad doble
-	sts UCSR0A, r16
-	ldi r16, 0b00000110
+	ldi r16, 0b0010_0010
+	sts UCSR0A, r16 
+	ldi r16, 0b0000_0110
 	sts UCSR0C, r16
-	ldi r16, 0b11011000
-	sts UCSR0B, r16  
+	ldi r16, 0b1101_1000 
+	sts UCSR0B, r16 
 
-	sei
+	;Seteo interrupci√≥n por timer 0
+	ldi r16, 0b10000000 ; uso modo normal, me baso en overflow
+	out TCCR0A, r16
+	ldi r16, 0x01
+	sts TIMSK0, r16
+	ldi r16, 0x00
+	out TCCR0B, r16 ; Todav√≠a no est√° prendido el timer 0, porque no seteamos el prescaler
+
+	sei ; Habilito las interrupciones globales
 
 chequeo_etapa:
 	sbrc flag_e, 0 
@@ -126,6 +145,8 @@ push_btm_etapa1:
 	ret
 
 pasar_eligiendo_numero:
+	ldi r16, 0x0f
+	out PORTC, r16 ; verificamos que lleg√≥ a esta funcion
 	clr flag_int
 	ldi flag_e, 0b00000010
 	rcall led_titilando
@@ -141,11 +162,12 @@ pasar_eligiendo_numero:
 	clr num_elegido
 	clr cont_dgt
 	ldi rleds, 0b00000001
+	clr flag_int
 	;Seteo interrupcion por: ADC
 	cli ; Deshabilita las interrupciones 
 
 	ldi r16, 0b11011111;Dejo deshabilitado el trigger
-	sts ADCSRA, r16 ;Seteo tension de referencia y frecuencia de la seÒal ADC Clock es fosc/128
+	sts ADCSRA, r16 ;Seteo tension de referencia y frecuencia de la se√±al ADC Clock es fosc/128
 
 	ldi r16, 0x00
 	sts ADCSRB, r16
@@ -308,7 +330,7 @@ juego:
 	rcall recibi_dato
 	ret
 
-; Ac· tengo que comprobar que si terminÛ el juego recien ahi tiene q volver, sino me chupa un huevo el botÛn
+; Ac√° tengo que comprobar que si termin√≥ el juego recien ahi tiene q volver, sino me chupa un huevo el bot√≥n
 push_btm_juego:
 	cpi vleds, 0b00000100
 	in r23, SREG
@@ -365,15 +387,15 @@ comparar_numeros:
 	clr rleds
 	ldi contador_tabla_compu, 4 ; Cargo contador de la tabla que llega desde la compu para poder ir moviendome
 loop_comparar_numeros:
-	ld num_compu, X+ ; Muevo una posiciÛn de la tabla de numero que entra por la compu
+	ld num_compu, X+ ; Muevo una posici√≥n de la tabla de numero que entra por la compu
 	ldi contador_tabla_elegido, 4 ; Cargo contador de la tabla del numero elegido para poder ir moviendome
 loop_tabla_elegido:
-	ld num_elegido, Y+ ; Muevo una posiciÛn de la tabla de numero elegido 
-	cp num_compu, num_elegido ; Comparo los n˙meros del numero q entra por la compu y el elegido
-	breq numeros_iguales ; Si son iguales salto a otra funciÛn, sino decremento el contador de la tabla de numero elegido
-	; veo si ya llegÛ a su fin, es decir q me movi 4 posiciones, y sino vuelvo al loop. Si ya llegÛ a su fin salto a 
+	ld num_elegido, Y+ ; Muevo una posici√≥n de la tabla de numero elegido 
+	cp num_compu, num_elegido ; Comparo los n√∫meros del numero q entra por la compu y el elegido
+	breq numeros_iguales ; Si son iguales salto a otra funci√≥n, sino decremento el contador de la tabla de numero elegido
+	; veo si ya lleg√≥ a su fin, es decir q me movi 4 posiciones, y sino vuelvo al loop. Si ya lleg√≥ a su fin salto a 
 	; termino_tabla_y q me reinicia el puntero en la tabla Y, decrementa el contador de la tabla x y vuelve a mover
-	; una posiciÛn en la tabla x, antes fijandose si ya llegamos al fin de esa tabla.
+	; una posici√≥n en la tabla x, antes fijandose si ya llegamos al fin de esa tabla.
 	dec contador_tabla_elegido
 	breq termino_tabla_y
 	rjmp loop_tabla_elegido
@@ -408,7 +430,7 @@ termino_tabla_x:
 	ldi YH, HIGH(TABLA_ELEGIDO)
 	; Incremento el contador de intentos
 	inc r16
-	; Veo si ya se terminÛ el juego
+	; Veo si ya se termin√≥ el juego
 	cpi vleds, 0b00000100
 	breq gano
 	;muestro resultados
@@ -485,8 +507,24 @@ apago_timer:
 
 ;---------------------------------------------------------------INTERRUPCIONES---------------------------------------------------------
 int0_push_btm:
+	ldi r16, 0b00000100
+	out TCCR0B, r16 ; Al setear ac√° el TCCR0B prendo el clock del timer 0 para el delay
+	ldi r16, 5 ; le cargo un 10 para alargar el antirrebote
+	reti
+
+;SOLO LO NECESITAMOS PARA INT0 Y PINCHANGE
+timer0_anti_rebote:
+	dec r16
+	cpi r16, 0
+	brne fin_anti_rebote
+	sbic PIND, 2
+	rjmp timer0_apagar
 	clr flag_int
 	sbr flag_int, 0
+timer0_apagar:
+	ldi r16, 0x00
+	out TCCR0B, r16
+fin_anti_rebote:
 	reti
 
 int_usart_rx:
@@ -509,3 +547,4 @@ int_timer:
 	clr flag_int
 	sbr flag_int, 4
 	reti
+
