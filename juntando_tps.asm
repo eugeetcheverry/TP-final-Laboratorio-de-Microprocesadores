@@ -290,14 +290,17 @@ decremento:
 pasar_juego:	
 	ldi flag_e, 0b00000100
 	clr flag_int
+	rcall deshabilitar_adc
 	;rcall limpiar_tabla
 	rcall pasar_tabla_ascii
 	ldi XL, low(TABLA_COMPU)
 	ldi XH, high(TABLA_COMPU)
-	subi YL, 4
+	subi YL, 3
 	sbci YH, 0
 	clr contador_tabla_elegido
 	clr contador_tabla_compu
+	clr num_elegido
+	clr num_compu
 	clr vleds
 	clr rleds
 	clr r16
@@ -305,7 +308,6 @@ pasar_juego:
 	clr delay1
 	out PORTB, r16
 	out PORTC, r16
-	rcall deshabilitar_adc
 	ret
 
 pasar_tabla_ascii:
@@ -371,14 +373,14 @@ deshabilitar_adc:
 	ret
 
 ;-----------------------------------------------ETAPA 3: JUEGO-----------------------------------------------------------
-/*juego:
+juego:
 	sbrc flag_int, 0
 	rcall push_btm_juego
 	sbrc flag_int, 1
 	rcall recibi_dato
-	ret*/
+	ret
 
-juego:
+/*juego:
 	ldi contador_tabla_elegido, 4
 loop_juego:
 	dec contador_tabla_elegido
@@ -422,12 +424,12 @@ termino_juego:
 	out PORTC, r16
 	ret
 
-
+*/
 ; Acá tengo que comprobar que si terminó el juego recien ahi tiene q volver, sino me chupa un huevo el botón
-/*push_btm_juego:
+push_btm_juego:
 	cpi vleds, 4
-	in r23, SREG
-	sbrs r23, 1
+	in aux_SREG, SREG
+	sbrs aux_SREG, 1
 	rjmp retorno_push_btm_juego
 	;VER QUE QUIERO Q HAGA CUANDO TERMINA EL JUEGO, ACA PRENDO TODOS LOS LEDS PARA VER
 	ldi r16, 0x0f
@@ -443,22 +445,22 @@ recibi_dato:
 	lds num_compu, UDR0
 	clr flag_int
 	cpi vleds, 4
-	in r23, SREG
-	sbrc r23, 1
+	in aux_SREG, SREG
+	sbrc aux_SREG, 1
 	rjmp termino_juego
 	st X+, num_compu
 	inc contador_tabla_compu
 	cpi contador_tabla_compu, 4
-	in r23, SREG
-	sbrc r23, 1
+	in aux_SREG, SREG
+	sbrc aux_SREG, 1
 	rcall numero_completo
 retorno_recibi_dato:
 	ret
 
 termino_juego:
 	cpi num_compu, 0x52 ; R en ascii
-	in r23, SREG
-	sbrs r23, 1
+	in aux_SREG, SREG
+	sbrs aux_SREG, 1
 	rjmp retorno_recibi_dato2
 	ldi r16, 0x0f
 	out PORTB, r16
@@ -476,37 +478,37 @@ numero_completo:
 loop_verifico_ascii:
 	ld num_compu, X+
 	cpi num_compu, 48 ; 48 es el ascii para el
-	in r23, SREG
-	sbrc r23, 0
-	ldi r16, 0x01
+	in aux_SREG, SREG
+	sbrc aux_SREG, 0
+	ldi delay1, 0x01
 	cpi num_compu, 57 ; 58 es el ascii para el :, que va despues del 9
-	in r23, SREG
-	sbrs r23, 0
-	ldi r16, 0x01
+	in aux_SREG, SREG
+	sbrs aux_SREG, 0
+	ldi delay1, 0x01
 	inc contador_tabla_compu
 	cpi contador_tabla_compu, 4
-	in r23, SREG
-	sbrc r23, 1
+	in aux_SREG, SREG
+	sbrc aux_SREG, 1
 	rjmp chequeo_si_es_numero
 	rjmp loop_verifico_ascii
 
 chequeo_si_es_numero:
-	cpi r16, 0x01 ; si esta clear es un numero
+	cpi delay1, 0x01 ; si esta clear es un numero
 	brne todos_numeros
-	clr r16
+	clr delay1
 	sub XL, contador_tabla_compu
 	sbci XH, 0 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
 	clr contador_tabla_compu
 	ret
 
-todos_numeros:
+/*todos_numeros:
 	ldi r16, 0x0f
 	out PORTC, r16
 	out PORTB, r16
 	ldi flag_e, 0b00000001
 	ret
 */
-/*todos_numeros:
+todos_numeros:
 	sub XL, contador_tabla_compu
 	sbci XH, 0 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
 	clr contador_tabla_compu ; Cargo contador de la tabla que llega desde la compu para poder ir moviendome
@@ -533,10 +535,10 @@ termino_tabla_y:
 	rjmp loop_comparar_numeros
 numeros_iguales:
 	cp contador_tabla_compu, contador_tabla_elegido
-	in r23, SREG
-	sbrs r23, 1
+	in aux_SREG, SREG
+	sbrs aux_SREG, 1
 	inc rleds
-	sbrc r23, 1
+	sbrc aux_SREG, 1
 	inc vleds
 	cpi contador_tabla_compu, 4
 	breq termino_tabla_x
@@ -565,7 +567,7 @@ retorno_comparo_numeros:
 	clr contador_tabla_compu
 	clr contador_tabla_elegido
 	clr r16
-	ret*/
+	ret
 
 
 ;-------------------------------------------------------------FUNCIONES AUXILIARES-----------------------------------------------------------
