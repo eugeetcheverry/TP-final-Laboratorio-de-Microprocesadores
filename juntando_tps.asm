@@ -208,6 +208,7 @@ limpiar_tabla:
 
 ;---------------------------------------------------------ETAPA 2: ELIGIENDO NUMERO--------------------------------------------
 eligiendo_numero:
+	rcall iniciar_adc
 	rcall movimiento_joystick
 	sbrc flag_int, 3 
 	rcall incremento
@@ -216,22 +217,31 @@ eligiendo_numero:
 	sbrc flag_int, 0
 	rcall elige_numero
 	out PORTC, rleds
-	out PORTB, contador_tabla_elegido
+	out PORTB, vleds
 	rjmp eligiendo_numero
+
+iniciar_adc: ; Seteo adc
+	ldi r16, 0b11110111
+	sts ADCSRA, r16 
+	ldi r16, 0x00
+	sts ADCSRB, r16
+	ldi r16, 0b01100100 ;ADC4
+	sts ADMUX, r16 
+	ret
 
 elige_numero:
 	clr flag_int
 	lsl rleds
 	ldi r16, 1
-	add XL, contador_tabla_elegido
+	add XL, vleds
 	adc XH, num_elegido 
 	st X, r16
-	sub XL, contador_tabla_elegido
+	sub XL, vleds
 	sbci XH, 0
-	mov r16, contador_tabla_elegido
+	mov r16, vleds
 	st Y+, r16
-	inc cont_dgt
-	cpi cont_dgt, 4
+	inc contador_tabla_elegido
+	cpi contador_tabla_elegido, 4
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	rcall pasar_juego
@@ -239,11 +249,11 @@ elige_numero:
 	rjmp chequeo_etapa
 	out PORTC, rleds
 	out PORTB, r16
-	;sbrc cont_dgt, 2
-	;rcall pasar_juego
 	ret
 
 movimiento_joystick:
+	ldi r16, 0b11011111;Dejo deshabilitado el trigger
+	sts ADCSRA, r16 ;Seteo tension de referencia y frecuencia de la señal ADC Clock es fosc/128
 	lds r16, ADCSRA
 	sbrs r16, 4
 	rjmp movimiento_joystick
@@ -272,20 +282,20 @@ movimiento_joystick:
 	ldi flag_int, 0b00010000
 	ldi r16, 0b11110111
 	sts ADCSRA, r16 
-	out PORTB, contador_tabla_elegido
+	out PORTB, vleds
 	ret
 
 incremento:
 	clr flag_int
-	inc contador_tabla_elegido
-	cpi contador_tabla_elegido, 10
+	inc vleds
+	cpi vleds, 10
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	ldi contador_tabla_elegido, 0
-	add XL, contador_tabla_elegido
+	ldi vleds, 0
+	add XL, vleds
 	adc XH, num_elegido
 	ld r16, X
-	sub XL, contador_tabla_elegido
+	sub XL, vleds
 	sbci XH, 0
 	cpi r16, 1
 	in aux_SREG, sreg
@@ -295,15 +305,15 @@ incremento:
 
 decremento:
 	clr flag_int
-	dec contador_tabla_elegido
-	cpi contador_tabla_elegido, 0
+	dec vleds
+	cpi vleds, 0
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	ldi contador_tabla_elegido, 10
-	add XL, contador_tabla_elegido
+	ldi vleds, 10
+	add XL, vleds
 	adc XH, num_elegido
 	ld r16, X
-	sub XL, contador_tabla_elegido
+	sub XL, vleds
 	sbci XH, 0
 	cpi r16, 1
 	in aux_SREG, sreg
@@ -528,19 +538,18 @@ fin_inter:
 	reti*/
 /*
 retardo_Tacm:
-	eor r21 , r21
+	eor contador_tabla_compu , contador_tabla_compu
 loop_retardo_t2cm:
-	inc r21
-	eor r20 , r20
-
+	inc contador_tabla_compu
+	eor delay1 , delay1
 loop_retardo_t1cm1:
-	inc r20
-	cpi r20 , 0xff
+	inc delay1
+	cpi delay1 , 0xff
 	brne loop_retardo_t1cm1
-
-	cpi r21 , 0xff
+	cpi contador_tabla_compu , 0xff
 	brne loop_retardo_t2cm
 	ret
+
 */;---------------------------------------------------------------INTERRUPCIONES---------------------------------------------------------
 int0_push_btm:
 	ldi r16, 0b00000101
