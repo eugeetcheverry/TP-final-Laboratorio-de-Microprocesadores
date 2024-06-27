@@ -106,6 +106,8 @@ elige_numero:
 	add XL, contador_tabla_elegido
 	adc XH, num_elegido 
 	st X, r16
+	sub XL, contador_tabla_elegido
+	sbci XH, 0
 	mov r16, contador_tabla_elegido
 	st Y+, r16
 	inc cont_dgt
@@ -150,6 +152,7 @@ movimiento_joystick:
 	ldi flag_int, 0b00010000
 	ldi r16, 0b11110111
 	sts ADCSRA, r16 
+	out PORTB, contador_tabla_elegido
 	ret
 
 incremento:
@@ -176,7 +179,7 @@ decremento:
 	cpi contador_tabla_elegido, 0
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	ldi contador_tabla_elegido, 9
+	ldi contador_tabla_elegido, 10
 	add XL, contador_tabla_elegido
 	adc XH, num_elegido
 	ld r16, X
