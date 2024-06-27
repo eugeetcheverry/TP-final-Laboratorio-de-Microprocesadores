@@ -3,13 +3,17 @@
 .def aux_joystick = r17
 .def contador_tabla_elegido = r18 
 .def aux_SREG = r19
-.def num_elegido = r20
-.def flag_int = r21
+.def num_elegido = r30
+.def flag_int = r31
 .def rleds = r22
 .def cont_dgt = r23
+.def flag_e = r24
 
 .dseg
 .org SRAM_START
+
+TABLA: .byte 10
+TABLA_ELEGIDO: .byte 4
 
 .cseg
 .org 0X0000
@@ -18,8 +22,8 @@
 .org INT0addr
 	rjmp int0_push_btm
 
-.org OVF0addr
-	rjmp timer0_anti_rebote
+/*.org OVF0addr
+	rjmp timer0_anti_rebote*/
 
 .org INT_VECTORS_SIZE
 
@@ -58,6 +62,12 @@ main:
 	clr cont_dgt
 	ldi rleds, 0b00000001
 
+	ldi XL, low(TABLA)
+	ldi XH, high(TABLA)
+
+	ldi YL, low(TABLA_ELEGIDO)
+	ldi YH, high(TABLA_ELEGIDO)
+
 	ldi r16, 0b11110111
 	sts ADCSRA, r16 
 
@@ -68,6 +78,15 @@ main:
 	sts ADMUX, r16 
 	sei
 
+	ldi flag_e, 0b00000010
+
+chequeo_etapa:
+	sbrc flag_e, 1
+	rcall eligiendo_numero
+	sbrc flag_e, 2
+	rcall juego
+	rjmp chequeo_etapa
+
 eligiendo_numero:
 	rcall movimiento_joystick
 	sbrc flag_int, 3 
@@ -76,31 +95,33 @@ eligiendo_numero:
 	rcall decremento
 	sbrc flag_int, 0
 	rcall elige_numero
+	out PORTC, rleds
+	out PORTB, contador_tabla_elegido
 	rjmp eligiendo_numero
 
 elige_numero:
+	clr flag_int
 	lsl rleds
 	mov r16, contador_tabla_elegido
 	st Y+, r16
 	inc cont_dgt
+	cpi cont_dgt, 3
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rcall pasar_juego
+	sbrc flag_e, 2
+	rjmp chequeo_etapa
 	out PORTC, rleds
+	out PORTB, r16
 	;sbrc cont_dgt, 2
 	;rcall pasar_juego
 	ret
 
 movimiento_joystick:
+	lds r16, ADCSRA
+	sbrs r16, 4
+	rjmp movimiento_joystick
 	lds aux_joystick, ADCH ;Valor del joystick
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
 	rcall retardo_Tacm
 	rcall retardo_Tacm
 	rcall retardo_Tacm
@@ -128,7 +149,7 @@ incremento:
 	ld r16, X
 	sbrc r16, 0
 	rcall muevo_puntero_inc
-	out PORTB, contador_tabla_elegido
+	clr flag_int
 	ret
 
 muevo_puntero_inc:
@@ -142,7 +163,6 @@ muevo_puntero_inc:
 	ld r16, X
 	sbrc r16, 0
 	rjmp muevo_puntero_inc
-	out PORTB, contador_tabla_elegido
 	ret
 
 paso_inicio_tabla:
@@ -161,9 +181,23 @@ decremento:
 	sbci XH, 0
 	ld r16, X
 	sbrc r16, 0
-	rcall muevo_puntero_inc
-	out PORTB, contador_tabla_elegido
+	rcall muevo_puntero_dec
+	clr flag_int
 	ret
+
+muevo_puntero_dec:
+	dec contador_tabla_elegido
+	cpi contador_tabla_elegido, 0
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp paso_fin_tabla 
+	sub XL, contador_tabla_elegido
+	sbci XH, 0
+	ld r16, X
+	sbrc r16, 0
+	rjmp muevo_puntero_dec
+	ret
+
 
 paso_fin_tabla:
 	ldi contador_tabla_elegido, 9
@@ -171,6 +205,43 @@ paso_fin_tabla:
 	adc XH, num_elegido
 	ret
 
+deshabilito_adc:
+	clr r16
+	sts ADCSRA, r16
+	ret
+
+pasar_juego:
+	clr flag_int
+	rcall limpiar_tabla
+	ldi flag_e, 0b00000100
+;	ldi XL, low(TABLA_JUGANDO)
+;	ldi XH, high(TABLA_JUGANDO)
+	ldi YL, low(TABLA_ELEGIDO)
+	ldi YH, high(TABLA_ELEGIDO)
+	rcall deshabilitar_adc;Apago contador
+	ret
+
+deshabilitar_adc:
+	clr r16
+	sts ADCSRA, r16
+	ret
+
+limpiar_tabla:
+	ldi r16, 0
+	st X+, r16
+	inc contador_tabla_elegido
+	cpi contador_tabla_elegido, 9
+	in aux_SREG, SREG
+	sbrs aux_SREG, 1
+	rjmp limpiar_tabla
+	clr contador_tabla_elegido
+	ret
+
+juego:
+	ldi r16, 0x0f
+	out PORTC, r16
+	out PORTB, r16
+	ret
 
 retardo_Tacm:
 	eor r21 , r21
@@ -190,18 +261,18 @@ loop_retardo_t1cm1:
 int0_push_btm:
 	ldi r16, 0b00000100
 	out TCCR0B, r16 ; Al setear acá el TCCR0B prendo el clock del timer 0 para el delay
+	ldi flag_int, 0x01
 	reti
 
 ;SOLO LO NECESITAMOS PARA INT0 Y PINCHANGE
 timer0_anti_rebote:
 	sbic PIND, 2
 	rjmp timer0_apagar
-	ldi flag_int, 0x01
 timer0_apagar:
 	ldi r16, 0x00
 	out TCCR0B, r16
 fin_anti_rebote:
-	reti
+	reti 
 
 
 
