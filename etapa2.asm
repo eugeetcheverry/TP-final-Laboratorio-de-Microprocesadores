@@ -136,6 +136,10 @@ movimiento_joystick:
 	rcall retardo_Tacm
 	rcall retardo_Tacm
 	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
 	cpi aux_joystick, 0b11110000
 	in aux_SREG, sreg
 	sbrs aux_SREG, 0
@@ -149,71 +153,41 @@ movimiento_joystick:
 	ret
 
 incremento:
-	cpi contador_tabla_elegido, 9
-	in aux_SREG, sreg
-	sbrc aux_SREG, 1
-	rcall paso_inicio_tabla
-	inc contador_tabla_elegido
-	add XL, contador_tabla_elegido
-	adc XH, num_elegido
-	ld r16, X
-	sbrc r16, 0
-	rcall muevo_puntero_inc
 	clr flag_int
-	ret
-
-muevo_puntero_inc:
-	cpi contador_tabla_elegido, 9
+	inc contador_tabla_elegido
+	cpi contador_tabla_elegido, 10
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	rcall paso_inicio_tabla
-	inc contador_tabla_elegido
+	ldi contador_tabla_elegido, 0
 	add XL, contador_tabla_elegido
 	adc XH, num_elegido
 	ld r16, X
-	sbrc r16, 0
-	rjmp muevo_puntero_inc
-	ret
-
-paso_inicio_tabla:
 	sub XL, contador_tabla_elegido
 	sbci XH, 0
-	clr contador_tabla_elegido
+	cpi r16, 1
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp incremento
 	ret
 
 decremento:
-	cpi contador_tabla_elegido, 0
-	in aux_SREG, sreg
-	sbrc aux_SREG, 1
-	rcall paso_fin_tabla
-	dec contador_tabla_elegido
-	sub XL, contador_tabla_elegido
-	sbci XH, 0
-	ld r16, X
-	sbrc r16, 0
-	rcall muevo_puntero_dec
 	clr flag_int
-	ret
-
-muevo_puntero_dec:
 	dec contador_tabla_elegido
 	cpi contador_tabla_elegido, 0
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	rjmp paso_fin_tabla 
-	sub XL, contador_tabla_elegido
-	sbci XH, 0
-	ld r16, X
-	sbrc r16, 0
-	rjmp muevo_puntero_dec
-	ret
-
-
-paso_fin_tabla:
 	ldi contador_tabla_elegido, 9
 	add XL, contador_tabla_elegido
 	adc XH, num_elegido
+	ld r16, X
+	sub XL, contador_tabla_elegido
+	sbci XH, 0
+	cpi r16, 1
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp decremento
 	ret
+
 
 deshabilito_adc:
 	clr r16
