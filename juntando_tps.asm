@@ -292,10 +292,10 @@ pasar_juego:
 	clr flag_int
 	rcall deshabilitar_adc
 	;rcall limpiar_tabla
-	rcall pasar_tabla_ascii
+	;rcall pasar_tabla_ascii
 	ldi XL, low(TABLA_COMPU)
 	ldi XH, high(TABLA_COMPU)
-	subi YL, 3
+	subi YL, 4
 	sbci YH, 0
 	clr contador_tabla_elegido
 	clr contador_tabla_compu
@@ -315,11 +315,7 @@ pasar_tabla_ascii:
 	sbci YH, 0
 	clr contador_tabla_elegido
 loop_pasar_ascii:
-	inc contador_tabla_elegido
-	cpi contador_tabla_elegido, 4
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	rjmp terminar_ascii
+	st Y, r16
 	ld r16, Y
 	cpi r16, 0
 	in aux_SREG, SREG
@@ -361,6 +357,13 @@ loop_pasar_ascii:
 	in aux_SREG, SREG
 	sbrc aux_SREG, 1
 	ldi r16, 57
+	add YL, contador_tabla_elegido
+	adc YH, aux_joystick
+	inc contador_tabla_elegido
+	cpi contador_tabla_elegido, 4
+	in aux_SREG, SREG
+	sbrc aux_SREG, 1
+	rjmp terminar_ascii
 	st Y+, r16
 	rjmp loop_pasar_ascii
 terminar_ascii:
@@ -379,8 +382,8 @@ juego:
 	sbrc flag_int, 1
 	rcall recibi_dato
 	ret
-
-/*juego:
+/*
+juego:
 	ldi contador_tabla_elegido, 4
 loop_juego:
 	dec contador_tabla_elegido
@@ -423,8 +426,8 @@ termino_juego:
 	ldi r16, 0x0f
 	out PORTC, r16
 	ret
-
 */
+
 ; Acá tengo que comprobar que si terminó el juego recien ahi tiene q volver, sino me chupa un huevo el botón
 push_btm_juego:
 	cpi vleds, 4
@@ -448,6 +451,7 @@ recibi_dato:
 	in aux_SREG, SREG
 	sbrc aux_SREG, 1
 	rjmp termino_juego
+	subi num_compu, 48
 	st X+, num_compu
 	inc contador_tabla_compu
 	cpi contador_tabla_compu, 4
@@ -477,11 +481,11 @@ numero_completo:
 	ldi contador_tabla_compu, 0
 loop_verifico_ascii:
 	ld num_compu, X+
-	cpi num_compu, 48 ; 48 es el ascii para el
+	cpi num_compu, 0 ; 48 es el ascii para el
 	in aux_SREG, SREG
 	sbrc aux_SREG, 0
 	ldi delay1, 0x01
-	cpi num_compu, 57 ; 58 es el ascii para el :, que va despues del 9
+	cpi num_compu, 9 ; 58 es el ascii para el :, que va despues del 9
 	in aux_SREG, SREG
 	sbrs aux_SREG, 0
 	ldi delay1, 0x01
