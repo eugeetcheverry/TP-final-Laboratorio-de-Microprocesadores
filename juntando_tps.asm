@@ -31,7 +31,7 @@
 
 TABLA: .byte 10
 TABLA_ELEGIDO: .byte 4
-TABLA_JUGANDO: .byte 4
+TABLA_COMPU: .byte 4
 
 .cseg
 .org 0X0000
@@ -48,11 +48,11 @@ TABLA_JUGANDO: .byte 4
 .org UTXCaddr
 	rjmp int_usart_tx
 
-.org ADCCaddr
-	rjmp int_adc
-
 .org OVF0addr
 	rjmp timer0_anti_rebote
+
+/*.org OC1Aaddr
+	rjmp toggle_leds*/
 
 .org INT_VECTORS_SIZE
 
@@ -111,6 +111,14 @@ main:
 	ldi r16, 0x00
 	out TCCR0B, r16 ; Todavía no está prendido el timer 0, porque no seteamos el prescaler
 
+	; Seteo adc
+	ldi r16, 0b11110111
+	sts ADCSRA, r16 
+	ldi r16, 0x00
+	sts ADCSRB, r16
+	ldi r16, 0b01100100 ;ADC4
+	sts ADMUX, r16 
+
 	sei ; Habilito las interrupciones globales
 
 chequeo_etapa:
@@ -118,8 +126,8 @@ chequeo_etapa:
 	rcall eligiendo_contrincante
 	sbrc flag_e, 1
 	rcall eligiendo_numero
-	sbrc flag_e, 2
-	rcall juego
+	/*sbrc flag_e, 2
+	rcall juego*/
 	rjmp chequeo_etapa
 
 ;------------------------------------------------ETAPA 1: ELIGIENDO CONTRINCANTE----------------------------------------------------------------------
@@ -131,6 +139,7 @@ eligiendo_contrincante:
 	ret
 
 usart_rx_etapa1:
+	clr flag_int
 	lds r16, UDR0
 	cpi r16, 78 ;Comparo con N
 	in aux_SREG, SREG
@@ -139,45 +148,194 @@ usart_rx_etapa1:
 	ret
 
 push_btm_etapa1:
+	clr flag_int
 	ldi r16, 78
 	sts UDR0, r16
 	rcall pasar_eligiendo_numero
 	ret
 
 pasar_eligiendo_numero:
-	ldi r16, 0x0f
-	out PORTC, r16 ; verificamos que llegó a esta funcion
 	clr flag_int
 	ldi flag_e, 0b00000010
-	rcall led_titilando
+	;rcall led_titilando
 	;Inicializo puntero a tabla
+	
 	ldi XL, low(TABLA)
 	ldi XH, high(TABLA)
 
 	ldi YL, low(TABLA_ELEGIDO)
 	ldi YH, high(TABLA_ELEGIDO)
 
-	rcall limpiar_tabla
+limpiar_tabla:
+	ldi r16, 0
+	st X+, r16
+	inc contador_tabla_elegido
+	cpi contador_tabla_elegido, 10
+	in aux_SREG, SREG
+	sbrs aux_SREG, 1
+	rjmp limpiar_tabla
 
+	clr aux_joystick
+	clr contador_tabla_elegido
+	clr aux_SREG
 	clr num_elegido
 	clr cont_dgt
-	ldi rleds, 0b00000001
 	clr flag_int
+	ldi rleds, 0b00000001
 	;Seteo interrupcion por: ADC
 	cli ; Deshabilita las interrupciones 
 
 	ldi r16, 0b11011111;Dejo deshabilitado el trigger
 	sts ADCSRA, r16 ;Seteo tension de referencia y frecuencia de la señal ADC Clock es fosc/128
-
 	ldi r16, 0x00
 	sts ADCSRB, r16
-
 	ldi r16, 0b01100100 ;ADC4
 	sts ADMUX, r16 
 	sei
 
 	ret
 
+/*limpiar_tabla:
+	ldi r16, 0
+	st X+, r16
+	inc contador_tabla_elegido
+	cpi contador_tabla_elegido, 10
+	in aux_SREG, SREG
+	sbrs aux_SREG, 1
+	rjmp limpiar_tabla
+	clr contador_tabla_elegido
+	ret*/
+
+;---------------------------------------------------------ETAPA 2: ELIGIENDO NUMERO--------------------------------------------
+eligiendo_numero:
+	rcall movimiento_joystick
+	sbrc flag_int, 3 
+	rcall incremento
+	sbrc flag_int, 4
+	rcall decremento
+	sbrc flag_int, 0
+	rcall elige_numero
+	out PORTC, rleds
+	out PORTB, contador_tabla_elegido
+	rjmp eligiendo_numero
+
+elige_numero:
+	clr flag_int
+	lsl rleds
+	ldi r16, 1
+	add XL, contador_tabla_elegido
+	adc XH, num_elegido 
+	st X, r16
+	sub XL, contador_tabla_elegido
+	sbci XH, 0
+	mov r16, contador_tabla_elegido
+	st Y+, r16
+	inc cont_dgt
+	cpi cont_dgt, 4
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rcall pasar_juego
+	sbrc flag_e, 2
+	rjmp chequeo_etapa
+	out PORTC, rleds
+	out PORTB, r16
+	;sbrc cont_dgt, 2
+	;rcall pasar_juego
+	ret
+
+movimiento_joystick:
+	lds r16, ADCSRA
+	sbrs r16, 4
+	rjmp movimiento_joystick
+	lds aux_joystick, ADCH ;Valor del joystick
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	cpi aux_joystick, 0b11110000
+	in aux_SREG, sreg
+	sbrs aux_SREG, 0
+	ldi flag_int, 0b00001000
+	cpi aux_joystick, 0b00001111
+	in aux_SREG, sreg
+	sbrc aux_SREG, 0
+	ldi flag_int, 0b00010000
+	ldi r16, 0b11110111
+	sts ADCSRA, r16 
+	out PORTB, contador_tabla_elegido
+	ret
+
+incremento:
+	clr flag_int
+	inc contador_tabla_elegido
+	cpi contador_tabla_elegido, 10
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	ldi contador_tabla_elegido, 0
+	add XL, contador_tabla_elegido
+	adc XH, num_elegido
+	ld r16, X
+	sub XL, contador_tabla_elegido
+	sbci XH, 0
+	cpi r16, 1
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp incremento
+	ret
+
+decremento:
+	clr flag_int
+	dec contador_tabla_elegido
+	cpi contador_tabla_elegido, 0
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	ldi contador_tabla_elegido, 10
+	add XL, contador_tabla_elegido
+	adc XH, num_elegido
+	ld r16, X
+	sub XL, contador_tabla_elegido
+	sbci XH, 0
+	cpi r16, 1
+	in aux_SREG, sreg
+	sbrc aux_SREG, 1
+	rjmp decremento
+	ret
+
+
+/*deshabilito_adc:
+	clr r16
+	sts ADCSRA, r16
+	ret*/
+
+pasar_juego:	
+	ldi r16, 0x0f
+	out PORTC, r16
+	out PORTB, r16
+	/*clr flag_int
+	rcall limpiar_tabla
+	ldi flag_e, 0b00000100
+;	ldi XL, low(TABLA_JUGANDO)
+;	ldi XH, high(TABLA_JUGANDO)
+	ldi YL, low(TABLA_ELEGIDO)
+	ldi YH, high(TABLA_ELEGIDO)
+	rcall deshabilitar_adc;Apago contador*/
+	ret
+
+/*deshabilitar_adc:
+	clr r16
+	sts ADCSRA, r16
+	ret*/
+/*
 limpiar_tabla:
 	ldi r16, 0
 	st X+, r16
@@ -187,143 +345,9 @@ limpiar_tabla:
 	sbrs aux_SREG, 1
 	rjmp limpiar_tabla
 	clr contador_tabla_elegido
-	ret
-;---------------------------------------------------------ETAPA 2: ELIGIENDO NUMERO--------------------------------------------
-eligiendo_numero:
-	out PORTC, rleds
-	sbrc flag_int, 0
-	rcall elige_numero
-	sbrc flag_e, 2
-	rcall chequeo_etapa
-	sbrc flag_int, 3 
-	rcall incremento
-	sbrc flag_int, 4
-	rcall decremento
-	ret
-
-elige_numero:
-	lsr rleds
-	mov r16, contador_tabla_elegido
-	st Y+, r16
-	rcall movimiento_joystick
-	inc cont_dgt
-	sbrc cont_dgt, 2
-	rcall pasar_juego
-	ret
-
-movimiento_joystick:
-	lds aux_joystick, ADCH ;Valor del joystick
-	cpi aux_joystick, max_valor
-	in aux_SREG, sreg
-	sbrs aux_SREG, 0 ;busque que testea brsh y es el glag del carry
-	rcall es_inc
-	cpi aux_joystick, min_valor
-	in aux_SREG, sreg
-	sbrc aux_SREG, 0 ;Busque que testea brlo y es el flag del carry
-	rcall es_dec
-	reti
-
-es_inc:
-	;Espero 30ms para ver si hay un deceremento
-	rcall timer_30ms
-	lds aux_joystick, ADCH
-	cpi aux_joystick, max_valor
-	in aux_SREG, sreg
-	sbrc aux_SREG, 0 ; si es menor esta limpio el flag del carry
-	sbr flag_int, 3
-	ret
-
-es_dec:
-	;Espero 30ms para ver si hay un deceremento
-	rcall timer_30ms
-	lds aux_joystick, ADCH
-	cpi aux_joystick, min_valor
-	in aux_SREG, sreg
-	sbrs aux_SREG, 0 ; si es menor esta limpio el flag del carry
-	sbr flag_int, 4
-	ret
-	
-
-incremento:
-	inc contador_tabla_elegido
-	cpi contador_tabla_elegido, 10
-	in aux_SREG, sreg
-	sbrc aux_SREG, 1
-	rjmp paso_inicio_tabla
-	ld r16, X+
-	sbrc r16, 0
-	rcall muevo_puntero_inc
-	ret
-
-muevo_puntero_inc:
-	inc contador_tabla_elegido
-	cpi contador_tabla_elegido, 10
-	in aux_SREG, sreg
-	sbrc aux_SREG, 1
-	rjmp paso_inicio_tabla
-	ldi XL, low(TABLA)
-	ldi XH, high(TABLA)
-	add XL, contador_tabla_elegido
-	adc XH, num_elegido
-	ld r16, X
-	sbrc r16, 0
-	rjmp muevo_puntero_inc
-	out PORTB, contador_tabla_elegido
-	ret
-
-paso_inicio_tabla:
-	ldi contador_tabla_elegido, 0
-	ldi XL, low(TABLA)
-	ldi XH, high(TABLA)
-	add XL, contador_tabla_elegido
-	adc XH, num_elegido
-	ret
-
-
-decremento:
-	dec contador_tabla_elegido
-	cpi contador_tabla_elegido, 0
-	in aux_SREG, sreg
-	sbrc aux_SREG, 1
-	rjmp paso_fin_tabla
-	ld r16, -X
-	sbrc r16, 0
-	rcall muevo_puntero_dec
-	out PORTB, contador_tabla_elegido
-	ret
-
-paso_fin_tabla:
-	ldi contador_tabla_elegido, 11
-
-muevo_puntero_dec:
-	dec contador_tabla_elegido
-	cpi contador_tabla_elegido, 0
-	in aux_SREG, sreg
-	sbrc aux_SREG, 1
-	rjmp paso_fin_tabla 
-	ldi XL, low(TABLA)
-	ldi XH, high(TABLA)
-	sub XL, contador_tabla_elegido
-	sbc XH, num_elegido
-	ld r16, X
-	sbrc r16, 0
-	rjmp muevo_puntero_dec
-	ret
-
-pasar_juego:
-	clr flag_int
-	rcall limpiar_tabla
-	ldi flag_e, 0b00000100
-	ldi XL, low(TABLA_JUGANDO)
-	ldi XH, high(TABLA_JUGANDO)
-	ldi YL, low(TABLA_ELEGIDO)
-	ldi YH, high(TABLA_ELEGIDO)
-	clr r16
-	sts ADCSRA, r16;Apago contador
-	ret
-
+	ret*/
 ;-----------------------------------------------ETAPA 3: JUEGO-----------------------------------------------------------
-juego:
+/*juego:
 	sbrc flag_int, 0
 	rcall push_btm_juego
 	sbrc flag_int, 1
@@ -332,108 +356,122 @@ juego:
 
 ; Acá tengo que comprobar que si terminó el juego recien ahi tiene q volver, sino me chupa un huevo el botón
 push_btm_juego:
-	cpi vleds, 0b00000100
+	cpi vleds, 4
 	in r23, SREG
-	sbrc r23, 1
+	sbrs r23, 1
 	rjmp retorno_push_btm_juego
-	ldi flag_e, 0x00
-	out PORTC, flag_e ; Apago los leds, uso este registro por comodidad
-	out PORTB, flag_e
+	;VER QUE QUIERO Q HAGA CUANDO TERMINA EL JUEGO, ACA PRENDO TODOS LOS LEDS PARA VER
+	ldi r16, 0x0f
+	out PORTB, r16
+	ldi flag_e, 0b00000001
+	clr vleds
+	clr rleds
 retorno_push_btm_juego:
+	clr flag_int
 	ret
 
-; EN DATO RECIBIDO TENGO QUE CHEQUEAR QUE NO HAYA GANADO Y Q ESTE RECIBIENDO UNA R
 recibi_dato:
-	lds r16, UDR0
-; Chequeo que no sea la R si ya termino el juego
-	cpi vleds, 0b00000100
+	lds num_compu, UDR0
+	clr flag_int
+	cpi vleds, 4
 	in r23, SREG
 	sbrc r23, 1
 	rjmp termino_juego
-	st X+, r16
+	st X+, num_compu
 	inc contador_tabla_compu
-	sbrc contador_tabla_compu, 2
+	cpi contador_tabla_compu, 4
+	in r23, SREG
+	sbrc r23, 1
 	rcall numero_completo
+retorno_recibi_dato:
+	ret
+
 termino_juego:
-	cpi r16, 82
+	cpi num_compu, 0x52 ; R en ascii
 	in r23, SREG
 	sbrs r23, 1
-	rjmp retorno_recibi_dato
-	ldi flag_e, 0x00
-	out PORTC, flag_e ; Apago los leds, uso este registro por comodidad
-	out PORTB, flag_e
-retorno_recibi_dato:
+	rjmp retorno_recibi_dato2
+	ldi r16, 0x0f
+	out PORTB, r16
+	ldi flag_e, 0b00000001
+	clr vleds
+	clr rleds
+retorno_recibi_dato2:
 	ret
 
 ; Compruebo que sea todo numeros ascii:
 numero_completo:
-	ldi contador_tabla_compu, 4
+	sub XL, contador_tabla_compu
+	sbc XH, r31 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
+	ldi contador_tabla_compu, 0
 loop_verifico_ascii:
 	ld num_compu, X+
-	cpi num_compu, 48 ; 48 es el ascii para el 0
-	brlo no_es_numero
-	cpi num_compu, 58 ; 58 es el ascii para el :, que va despues del 9
-	brsh no_es_numero
-	dec contador_tabla_compu
-	breq comparar_numeros
+	cpi num_compu, 48 ; 48 es el ascii para el
+	in r23, SREG
+	sbrc r23, 0
+	ldi r16, 0x01
+	cpi num_compu, 57 ; 58 es el ascii para el :, que va despues del 9
+	in r23, SREG
+	sbrs r23, 0
+	ldi r16, 0x01
+	inc contador_tabla_compu
+	cpi contador_tabla_compu, 4
+	in r23, SREG
+	sbrc r23, 1
+	rjmp chequeo_si_es_numero
 	rjmp loop_verifico_ascii
-no_es_numero:
+
+chequeo_si_es_numero:
+	cpi r16, 0x01 ; si esta clear es un numero
+	brne todos_numeros
+	clr r16
+	sub XL, contador_tabla_compu
+	sbc XH, r31 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
+	clr contador_tabla_compu
 	ret
 
-comparar_numeros:
-	ldi XL, LOW(TABLA_JUGANDO)
-	ldi XH, HIGH(TABLA_JUGANDO)
+todos_numeros:
+	sub XL, contador_tabla_compu
+	sbc XH, r31 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
+	clr contador_tabla_compu ; Cargo contador de la tabla que llega desde la compu para poder ir moviendome
 	clr vleds
 	clr rleds
-	ldi contador_tabla_compu, 4 ; Cargo contador de la tabla que llega desde la compu para poder ir moviendome
 loop_comparar_numeros:
 	ld num_compu, X+ ; Muevo una posición de la tabla de numero que entra por la compu
-	ldi contador_tabla_elegido, 4 ; Cargo contador de la tabla del numero elegido para poder ir moviendome
+	inc contador_tabla_compu
+	ldi contador_tabla_elegido, 0 ; Cargo contador de la tabla del numero elegido para poder ir moviendome
 loop_tabla_elegido:
 	ld num_elegido, Y+ ; Muevo una posición de la tabla de numero elegido 
-	cp num_compu, num_elegido ; Comparo los números del numero q entra por la compu y el elegido
-	breq numeros_iguales ; Si son iguales salto a otra función, sino decremento el contador de la tabla de numero elegido
-	; veo si ya llegó a su fin, es decir q me movi 4 posiciones, y sino vuelvo al loop. Si ya llegó a su fin salto a 
-	; termino_tabla_y q me reinicia el puntero en la tabla Y, decrementa el contador de la tabla x y vuelve a mover
-	; una posición en la tabla x, antes fijandose si ya llegamos al fin de esa tabla.
-	dec contador_tabla_elegido
+	inc contador_tabla_elegido
+	cp num_compu, num_elegido 
+	breq numeros_iguales 
+	cpi contador_tabla_elegido, 4
 	breq termino_tabla_y
 	rjmp loop_tabla_elegido
 termino_tabla_y:
 	; Reinicio el puntero Y
-	ldi YL, LOW(TABLA_ELEGIDO)
-	ldi YH, HIGH(TABLA_ELEGIDO)
-	dec contador_tabla_compu
+	cpi contador_tabla_compu, 4
 	breq termino_tabla_x
+	sub YL, contador_tabla_elegido
+	sbc YH, r31
 	rjmp loop_comparar_numeros
 numeros_iguales:
 	cp contador_tabla_compu, contador_tabla_elegido
-	breq contadores_iguales
+	in r23, SREG
+	sbrs r23, 1
 	inc rleds
-	ldi YL, LOW(TABLA_ELEGIDO)
-	ldi YH, HIGH(TABLA_ELEGIDO)
-	dec contador_tabla_compu
-	breq termino_tabla_x
-	rjmp loop_comparar_numeros
-contadores_iguales:
+	sbrc r23, 1
 	inc vleds
-	ldi YL, LOW(TABLA_ELEGIDO)
-	ldi YH, HIGH(TABLA_ELEGIDO)
-	dec contador_tabla_compu
+	cpi contador_tabla_compu, 4
 	breq termino_tabla_x
+	sub YL, contador_tabla_elegido
+	sbc YH, r31
 	rjmp loop_comparar_numeros
 termino_tabla_x:
-	; reinicio ambos punteros
-	ldi XL, LOW(TABLA_JUGANDO)
-	ldi XH, HIGH(TABLA_JUGANDO)
-	ldi YL, LOW(TABLA_ELEGIDO)
-	ldi YH, HIGH(TABLA_ELEGIDO)
-	; Incremento el contador de intentos
-	inc r16
+	inc r30 ; Incremento el contador de intentos 
 	; Veo si ya se terminó el juego
 	cpi vleds, 0b00000100
 	breq gano
-	;muestro resultados
 	andi vleds, 0b00001111
 	andi rleds, 0b00001111
 	out PORTB, vleds
@@ -442,109 +480,87 @@ termino_tabla_x:
 gano: 
 	andi vleds, 0b00001111
 	out PORTB, vleds
-	out PORTC, r16
+	out PORTC, r30
 retorno_comparo_numeros:
+	sub XL, contador_tabla_compu
+	sbc XH, r31 ; Este lo reinicio para que se pueda escribir de nuevo
+	sub YL, contador_tabla_elegido
+	sbc YH, r31
+	clr contador_tabla_compu
+	clr contador_tabla_elegido
+	clr r16
 	ret
+	*/
 
 ;-------------------------------------------------------------FUNCIONES AUXILIARES-----------------------------------------------------------
-;FUNCION LED_TITILANDO
-led_titilando:
-	;timer de 3s por overflow, 
+/*led_titilando:
 	cli
-	ldi r16, 0b10000010
-	out TCCR0A, r16
-	ldi r16, 0b10000010
-	out TCCR0A, r16
-
-	ldi r16, 0xff ; top con prescaler de 1024
-	out OCR0A, r16
+	ldi r16, 0b10000000
+	sts TCCR1A, r16
+	ldi r16, 0x0f ;para una frecuencia de 2hz
+	sts OCR1AH, r16
+	ldi r16, 0b00111100 ;para una frecuencia de 2hz
+	sts OCR1AL, r16
+	ldi r16, 0b00000010
+	sts TIMSK1, r16 ; TIFR1 1
 	sei
-	ldi r16, 0b00000101
-	out TCCR0B, r16 ; cuando seteamos el prescaler 64 arranca a contar
+	ldi r16, 0b00001101
+	sts TCCR1B, r16
+	ret
 
-	ldi r16, 95; contador
-	ldi num_compu, 0b00001010
-	out PORTC, r17
-	out PORTB, r17
-	
-timer_loop_leds:
-	sbic TIFR0, 0
-	inc r16
-	cpi r16, 0
-	in aux_SREG, sreg
-	sbrc aux_SREG, 1
-	rjmp apago_timer_leds
-	out PINC, num_compu
-	out PIND, num_compu
-	rjmp timer_loop
-
-apago_timer_leds:
+toggle_leds:
+	sbic TIFR1, 1
+	dec rleds
+	cpi rleds, 0
+	breq fin_timer
+	ldi vleds, 0b00001111
+	out PINC, vleds 
+	out PINB, vleds ; haciendo con toggle
+	reti
+fin_timer:
 	clr r16
-	out TCCR0B, r16
+	sts TCCR1B, r16
 	out PORTC, r16
 	out PORTB, r16
-	ret
+fin_inter:
+	ldi r16, 0b00001000
+	sts TCCR1B, r16
+	reti*/
+/*
+retardo_Tacm:
+	eor r21 , r21
+loop_retardo_t2cm:
+	inc r21
+	eor r20 , r20
 
-;FUNCION TIMER
-timer_30ms:
-	;Seteo interrupcion por: TIMER
-	; Configuro el timer 0
-	cli
-	ldi r16, 0b10000010
-	out TCCR0A, r16
-	ldi r16, 237 ; top con prescaler de 1024
-	out OCR0A, r16
-	sei
-	ldi r16, 0b00000101
-	out TCCR0B, r16 ; cuando seteamos el prescaler 64 arranca a contar
-timer_loop:
-	sbis TIFR0, 1
-	rjmp timer_loop
-apago_timer:
-	clr r16
-	out TCCR0B, r16
-	ret
+loop_retardo_t1cm1:
+	inc r20
+	cpi r20 , 0xff
+	brne loop_retardo_t1cm1
 
-;---------------------------------------------------------------INTERRUPCIONES---------------------------------------------------------
+	cpi r21 , 0xff
+	brne loop_retardo_t2cm
+	ret
+*/;---------------------------------------------------------------INTERRUPCIONES---------------------------------------------------------
 int0_push_btm:
-	ldi r16, 0b00000100
+	ldi r16, 0b00000101
 	out TCCR0B, r16 ; Al setear acá el TCCR0B prendo el clock del timer 0 para el delay
-	ldi r16, 5 ; le cargo un 10 para alargar el antirrebote
 	reti
 
-;SOLO LO NECESITAMOS PARA INT0 Y PINCHANGE
+;SOLO LO NECESITAMOS PARA INT0 
 timer0_anti_rebote:
-	dec r16
-	cpi r16, 0
-	brne fin_anti_rebote
 	sbic PIND, 2
 	rjmp timer0_apagar
-	clr flag_int
-	sbr flag_int, 0
+	ldi flag_int, 0b00000001
 timer0_apagar:
 	ldi r16, 0x00
 	out TCCR0B, r16
-fin_anti_rebote:
 	reti
 
 int_usart_rx:
-	clr flag_int
-	sbr flag_int, 1
+	ldi flag_int, 0b00000010
 	reti
 
 int_usart_tx:
-	clr flag_int
-	sbr flag_int, 2
-	reti
-
-int_adc:
-	clr flag_int
-	rjmp movimiento_joystick
-	reti
-
-
-int_timer:
-	clr flag_int
-	sbr flag_int, 4
 	reti
 
