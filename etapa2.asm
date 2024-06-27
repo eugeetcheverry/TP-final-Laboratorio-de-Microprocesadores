@@ -102,10 +102,14 @@ eligiendo_numero:
 elige_numero:
 	clr flag_int
 	lsl rleds
+	ldi r16, 1
+	add XL, contador_tabla_elegido
+	adc XH, num_elegido 
+	st X, r16
 	mov r16, contador_tabla_elegido
 	st Y+, r16
 	inc cont_dgt
-	cpi cont_dgt, 3
+	cpi cont_dgt, 4
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	rcall pasar_juego
@@ -122,6 +126,12 @@ movimiento_joystick:
 	sbrs r16, 4
 	rjmp movimiento_joystick
 	lds aux_joystick, ADCH ;Valor del joystick
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
+	rcall retardo_Tacm
 	rcall retardo_Tacm
 	rcall retardo_Tacm
 	rcall retardo_Tacm
