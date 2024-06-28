@@ -28,10 +28,10 @@
 
 .dseg
 .org SRAM_START
-
-TABLA: .byte 10
 TABLA_ELEGIDO: .byte 4
 TABLA_COMPU: .byte 4
+TABLA: .byte 10
+
 
 .cseg
 .org 0X0000
@@ -51,8 +51,8 @@ TABLA_COMPU: .byte 4
 .org OVF0addr
 	rjmp timer0_anti_rebote
 
-/*.org OC1Aaddr
-	rjmp toggle_leds*/
+.org OC1Aaddr
+	rjmp toggle_leds
 
 .org INT_VECTORS_SIZE
 
@@ -157,7 +157,7 @@ push_btm_etapa1:
 pasar_eligiendo_numero:
 	clr flag_int
 	ldi flag_e, 0b00000010
-	;rcall led_titilando
+	rcall led_titilando
 	ldi XL, low(TABLA)
 	ldi XH, high(TABLA)
 	ldi YL, LOW(TABLA_ELEGIDO)
@@ -201,11 +201,12 @@ elige_numero:
 	lsl rleds
 	st Y+, vleds
 	ldi r16, 1
+	clc 
 	add XL, vleds
 	adc XH, num_elegido 
 	st X, r16
-	sub XL, vleds
-	sbci XH, 0
+	ldi XL, LOW(TABLA)
+	ldi XH, HIGH(TABLA)
 	inc contador_tabla_elegido
 	cpi contador_tabla_elegido, 4
 	in aux_SREG, sreg
@@ -257,11 +258,12 @@ incremento:
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	ldi vleds, 0
+	clc
 	add XL, vleds
 	adc XH, num_elegido
 	ld r16, X
-	sub XL, vleds
-	sbci XH, 0
+	ldi XL, LOW(TABLA)
+	ldi XH, HIGH(TABLA)
 	cpi r16, 1
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
@@ -275,11 +277,12 @@ decremento:
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	ldi vleds, 10
+	clc
 	add XL, vleds
 	adc XH, num_elegido
 	ld r16, X
-	sub XL, vleds
-	sbci XH, 0
+	ldi XL, LOW(TABLA)
+	ldi XH, HIGH(TABLA)
 	cpi r16, 1
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
@@ -291,12 +294,10 @@ pasar_juego:
 	ldi flag_e, 0b00000100
 	clr flag_int
 	rcall deshabilitar_adc
-	;rcall limpiar_tabla
-	;rcall pasar_tabla_ascii
 	ldi XL, low(TABLA_COMPU)
 	ldi XH, high(TABLA_COMPU)
-	subi YL, 4
-	sbci YH, 0
+	ldi YL, LOW(TABLA_ELEGIDO)
+	ldi YH, HIGH(TABLA_ELEGIDO)
 	clr contador_tabla_elegido
 	clr contador_tabla_compu
 	clr num_elegido
@@ -305,70 +306,8 @@ pasar_juego:
 	clr rleds
 	clr r16
 	clr aux_joystick
-	clr delay1
-	out PORTB, r16
 	out PORTC, r16
 	ret
-
-pasar_tabla_ascii:
-	subi YL, 4
-	sbci YH, 0
-	clr contador_tabla_elegido
-loop_pasar_ascii:
-	st Y, r16
-	ld r16, Y
-	cpi r16, 0
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 48
-	cpi r16, 1
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 49
-	cpi r16, 2
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 50
-	cpi r16, 3
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 51
-	cpi r16, 4
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 52
-	cpi r16, 5
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 53
-	cpi r16, 6
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 54
-	cpi r16, 7
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 55
-	cpi r16, 8
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 56
-	cpi r16, 9
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	ldi r16, 57
-	add YL, contador_tabla_elegido
-	adc YH, aux_joystick
-	inc contador_tabla_elegido
-	cpi contador_tabla_elegido, 4
-	in aux_SREG, SREG
-	sbrc aux_SREG, 1
-	rjmp terminar_ascii
-	st Y+, r16
-	rjmp loop_pasar_ascii
-terminar_ascii:
-	ret
-
 
 deshabilitar_adc:
 	clr r16
@@ -382,51 +321,6 @@ juego:
 	sbrc flag_int, 1
 	rcall recibi_dato
 	ret
-/*
-juego:
-	ldi contador_tabla_elegido, 4
-loop_juego:
-	dec contador_tabla_elegido
-	cpi contador_tabla_elegido, 0
-	breq termino_juego
-	ld r16, Y+
-	out PORTB, r16
-	swap r16
-	out PORTC, r16
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rcall retardo_Tacm
-	rjmp loop_juego
-termino_juego:
-	ldi r16, 0x0f
-	out PORTC, r16
-	ret
-*/
 
 ; Acá tengo que comprobar que si terminó el juego recien ahi tiene q volver, sino me chupa un huevo el botón
 push_btm_juego:
@@ -435,8 +329,6 @@ push_btm_juego:
 	sbrs aux_SREG, 1
 	rjmp retorno_push_btm_juego
 	;VER QUE QUIERO Q HAGA CUANDO TERMINA EL JUEGO, ACA PRENDO TODOS LOS LEDS PARA VER
-	ldi r16, 0x0f
-	out PORTB, r16
 	ldi flag_e, 0b00000001
 	clr vleds
 	clr rleds
@@ -449,9 +341,9 @@ recibi_dato:
 	clr flag_int
 	cpi vleds, 4
 	in aux_SREG, SREG
-	sbrc aux_SREG, 1
+	sbrc r23, 1
 	rjmp termino_juego
-	subi num_compu, 48
+	subi num_compu, '0'
 	st X+, num_compu
 	inc contador_tabla_compu
 	cpi contador_tabla_compu, 4
@@ -461,13 +353,12 @@ recibi_dato:
 retorno_recibi_dato:
 	ret
 
+
 termino_juego:
 	cpi num_compu, 0x52 ; R en ascii
 	in aux_SREG, SREG
 	sbrs aux_SREG, 1
 	rjmp retorno_recibi_dato2
-	ldi r16, 0x0f
-	out PORTB, r16
 	ldi flag_e, 0b00000001
 	clr vleds
 	clr rleds
@@ -476,19 +367,19 @@ retorno_recibi_dato2:
 
 ; Compruebo que sea todo numeros ascii:
 numero_completo:
-	sub XL, contador_tabla_compu
-	sbci XH, 0 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
+	ldi XL, LOW(TABLA_COMPU)
+	ldi XH, HIGH(TABLA_COMPU)
 	ldi contador_tabla_compu, 0
 loop_verifico_ascii:
 	ld num_compu, X+
 	cpi num_compu, 0 ; 48 es el ascii para el
 	in aux_SREG, SREG
 	sbrc aux_SREG, 0
-	ldi delay1, 0x01
-	cpi num_compu, 9 ; 58 es el ascii para el :, que va despues del 9
+	ldi r16, 0x01
+	cpi num_compu, 10 ; 58 es el ascii para el :, que va despues del 9
 	in aux_SREG, SREG
 	sbrs aux_SREG, 0
-	ldi delay1, 0x01
+	ldi r16, 0x01
 	inc contador_tabla_compu
 	cpi contador_tabla_compu, 4
 	in aux_SREG, SREG
@@ -497,24 +388,17 @@ loop_verifico_ascii:
 	rjmp loop_verifico_ascii
 
 chequeo_si_es_numero:
-	cpi delay1, 0x01 ; si esta clear es un numero
+	cpi r16, 0x01 ; si esta clear es un numero
 	brne todos_numeros
-	clr delay1
-	sub XL, contador_tabla_compu
-	sbci XH, 0 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
+	clr r16
+	ldi XL, LOW(TABLA_COMPU)
+	ldi XH, HIGH(TABLA_COMPU)
 	clr contador_tabla_compu
 	ret
 
-/*todos_numeros:
-	ldi r16, 0x0f
-	out PORTC, r16
-	out PORTB, r16
-	ldi flag_e, 0b00000001
-	ret
-*/
 todos_numeros:
-	sub XL, contador_tabla_compu
-	sbci XH, 0 ; muevo el puntero de la tabla compu para que este de nuevo al comienzo
+	ldi XL, LOW(TABLA_COMPU)
+	ldi XH, HIGH(TABLA_COMPU)
 	clr contador_tabla_compu ; Cargo contador de la tabla que llega desde la compu para poder ir moviendome
 	clr vleds
 	clr rleds
@@ -534,8 +418,8 @@ termino_tabla_y:
 	; Reinicio el puntero Y
 	cpi contador_tabla_compu, 4
 	breq termino_tabla_x
-	sub YL, contador_tabla_elegido
-	sbci YH, 0
+	ldi YL, LOW(TABLA_ELEGIDO)
+	ldi YH, HIGH(TABLA_ELEGIDO)
 	rjmp loop_comparar_numeros
 numeros_iguales:
 	cp contador_tabla_compu, contador_tabla_elegido
@@ -546,11 +430,11 @@ numeros_iguales:
 	inc vleds
 	cpi contador_tabla_compu, 4
 	breq termino_tabla_x
-	sub YL, contador_tabla_elegido
-	sbci YH, 0
+	ldi YL, LOW(TABLA_ELEGIDO)
+	ldi YH, HIGH(TABLA_ELEGIDO)
 	rjmp loop_comparar_numeros
 termino_tabla_x:
-	inc aux_joystick ; Incremento el contador de intentos 
+	inc delay1 ; Incremento el contador de intentos 
 	; Veo si ya se terminó el juego
 	cpi vleds, 0b00000100
 	breq gano
@@ -562,17 +446,16 @@ termino_tabla_x:
 gano: 
 	andi vleds, 0b00001111
 	out PORTB, vleds
-	out PORTC, aux_joystick
+	out PORTC, delay1
 retorno_comparo_numeros:
-	sub XL, contador_tabla_compu
-	sbci XH, 0 ; Este lo reinicio para que se pueda escribir de nuevo
-	sub YL, contador_tabla_elegido
-	sbci YH, 0
+	ldi XL, LOW(TABLA_COMPU)
+	ldi XH, HIGH(TABLA_COMPU)
+	ldi YL, LOW(TABLA_ELEGIDO)
+	ldi YH, HIGH(TABLA_ELEGIDO)
 	clr contador_tabla_compu
 	clr contador_tabla_elegido
 	clr r16
 	ret
-
 
 ;-------------------------------------------------------------FUNCIONES AUXILIARES-----------------------------------------------------------
 led_titilando:
@@ -607,6 +490,9 @@ fin_timer:
 fin_inter:
 	ldi r16, 0b00001000
 	sts TCCR1B, r16
+	clr rleds
+	clr vleds
+	clr r16
 	reti
 
 retardo_Tacm:
