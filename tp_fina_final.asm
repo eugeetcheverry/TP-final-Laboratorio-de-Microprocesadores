@@ -21,7 +21,7 @@
 .def rleds = r24 ; --> funciona como contador_numeros_mal_posicionados
 .def vleds = r25 ; --> funciona como contador_numeros_bien_posicionados
 .def aux_joystick = r30
-.def delay1 = r31 ; ESTE CREO Q PODEMOS USAR EL MISMO PARA OTRO
+.def intentos = r31 ; ESTE CREO Q PODEMOS USAR EL MISMO PARA OTRO
 
 .dseg
 .org SRAM_START
@@ -113,6 +113,8 @@ main:
 	ldi r16, 0b01100100 ;ADC4
 	sts ADMUX, r16 
 
+	clr r16
+
 	sei ; Habilito las interrupciones globales
 
 chequeo_etapa:
@@ -149,20 +151,21 @@ push_btm_etapa1:
 	ret
 
 pasar_eligiendo_numero:
+	clr flag_int
+	ldi flag_e, 0b00000010
 	rcall leds_titilando
 	ldi XL, low(TABLA)
 	ldi XH, high(TABLA)
 	ldi YL, LOW(TABLA_ELEGIDO)
 	ldi YH, HIGH(TABLA_ELEGIDO)
 	rcall limpiar_tabla
-	clr flag_int
 	clr aux_joystick
 	clr vleds
 	clr aux_SREG
 	clr num_elegido
+	clr flag_int
 	clr contador_tabla_elegido
 	ldi rleds, 0b00000001
-	ldi flag_e, 0b00000010
 	ret
 
 ;---------------------------------------------------------ETAPA 2: ELIGIENDO NUMERO--------------------------------------------
@@ -273,6 +276,8 @@ decremento:
 pasar_juego:	
 	ldi flag_e, 0b00000100
 	clr flag_int
+	rcall leds_titilando
+	rcall enviar_j
 	rcall deshabilitar_adc
 	ldi XL, low(TABLA_COMPU)
 	ldi XH, high(TABLA_COMPU)
@@ -293,6 +298,10 @@ deshabilitar_adc:
 	clr r16
 	sts ADCSRA, r16
 	ret
+enviar_j:
+	ldi r16, 74
+	sts UDR0, r16
+	ret
 
 ;-----------------------------------------------ETAPA 3: JUEGO-----------------------------------------------------------
 juego:
@@ -308,10 +317,7 @@ push_btm_juego:
 	in aux_SREG, SREG
 	sbrs aux_SREG, 1
 	rjmp retorno_push_btm_juego
-	;VER QUE QUIERO Q HAGA CUANDO TERMINA EL JUEGO, ACA PRENDO TODOS LOS LEDS PARA VER
-	ldi flag_e, 0b00000001
-	clr vleds
-	clr rleds
+	rcall paso_etapa1
 retorno_push_btm_juego:
 	clr flag_int
 	ret
@@ -321,7 +327,7 @@ recibi_dato:
 	clr flag_int
 	cpi vleds, 4
 	in aux_SREG, SREG
-	sbrc r23, 1
+	sbrc aux_SREG, 1
 	rjmp termino_juego
 	subi num_compu, '0'
 	st X+, num_compu
@@ -339,9 +345,7 @@ termino_juego:
 	in aux_SREG, SREG
 	sbrs aux_SREG, 1
 	rjmp retorno_recibi_dato2
-	ldi flag_e, 0b00000001
-	clr vleds
-	clr rleds
+	rcall paso_etapa1
 retorno_recibi_dato2:
 	ret
 
@@ -414,7 +418,7 @@ numeros_iguales:
 	ldi YH, HIGH(TABLA_ELEGIDO)
 	rjmp loop_comparar_numeros
 termino_tabla_x:
-	inc delay1 ; Incremento el contador de intentos 
+	inc intentos ; Incremento el contador de intentos 
 	; Veo si ya se terminó el juego
 	cpi vleds, 0b00000100
 	breq gano
@@ -425,8 +429,9 @@ termino_tabla_x:
 	rjmp retorno_comparo_numeros
 gano: 
 	andi vleds, 0b00001111
-	out PORTB, vleds
-	out PORTC, delay1
+	ldi aux_joystick, 0x0f
+	out PORTB, aux_joystick
+	out PORTC, intentos
 retorno_comparo_numeros:
 	ldi XL, LOW(TABLA_COMPU)
 	ldi XH, HIGH(TABLA_COMPU)
@@ -437,10 +442,31 @@ retorno_comparo_numeros:
 	clr r16
 	ret
 
+paso_etapa1:
+	ldi flag_e, 0b00000001
+	clr vleds
+	clr rleds
+	clr r16
+	clr contador_tabla_elegido
+	clr contador_tabla_compu
+	clr num_elegido
+	clr num_compu
+	clr aux_SREG
+	clr aux_joystick
+	clr intentos
+	rcall leds_titilando
+	out PORTC, vleds
+	out PORTB, rleds
+	ret
+
 ;-------------------------------------------------------------FUNCIONES AUXILIARES-----------------------------------------------------------
 leds_titilando:
+	ldi r16, 0x00
+	out PORTC, r16
+	out PORTB, r16
 	cli
-	ldi r16, 0b00000000
+	;ldi r16, 0b10000000
+	ldi r16, 0x00
 	sts TCCR1A, r16
 	ldi r16, 0x0f ;para una frecuencia de 2hz
 	sts OCR1AH, r16
@@ -459,43 +485,44 @@ toggle_leds:
 	dec rleds
 	cpi rleds, 0
 	breq fin_timer
-	out PINB, vleds 
 	out PINC, vleds 
+	out PINB, vleds 
 	sbi TIFR1, 1
 	rjmp toggle_leds; haciendo con toggle
 fin_timer:
 	clr r16
+	;Probando porq no funciona bien
 	clr vleds
 	clr rleds
+	; aca termina la prueba
 	sts TCCR1B, r16
 	out PORTC, r16
 	out PORTB, r16
 	ret
 
-
 delay:
 	cli
-	ldi r16, 0b00000010
-	sts TCCR2A, r16
-	ldi r16, 255 ;para una frecuencia de 2hz
-	sts OCR2A, r16
-	clr r16
-	sts TIMSK2, r16 ; TIFR1 1
+	ldi intentos, 0b00000010
+	sts TCCR2A, intentos
+	ldi intentos, 255 ;para una frecuencia de 2hz
+	sts OCR2A, intentos
+	clr intentos
+	sts TIMSK2, intentos ; TIFR1 1
 	sei
-	ldi r16, 0b00000111
-	sts TCCR2B, r16
-	ldi r16, 15
+	ldi intentos, 0b00000111
+	sts TCCR2B, intentos
+	ldi intentos, 15
 loop_delay:
 	sbis TIFR2, 1
 	rjmp loop_delay
-	dec r16
-	cpi r16, 0
+	dec intentos
+	cpi intentos, 0
 	breq fin_delay
 	sbi TIFR2, 1
 	rjmp loop_delay
 fin_delay:
-	clr r16
-	sts TCCR2B, r16
+	clr intentos
+	sts TCCR2B, intentos
 	ret
 
 limpiar_tabla:
