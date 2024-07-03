@@ -1,11 +1,11 @@
 .include "m328pdef.inc"
 
-.def flag_e = r17 ;0b00000cba
+.def flag_e = r17 ; Flag de estapa: 0b00000cba
 ;a = eligiendo contrincante
 ;b = eligiendo numero
 ;c = juego
 
-.def flag_int = r18 ;0b00fedcba
+.def flag_int = r18 ; Flag de interrupciones: 0b00fedcba
 ;a = int0
 ;b = usart rx
 ;c = usart tx
@@ -13,22 +13,22 @@
 ;e = adc_dec
 ;f = timer
 
-.def contador_tabla_elegido = r19 ; este funciona como contador_tabla
+; Definimos registros 
+.def contador_tabla_elegido = r19 ;
 .def contador_tabla_compu = r20
-.def num_elegido = r21 ; --> funciona como cero
+.def num_elegido = r21 ; 
 .def num_compu = r22
 .def aux_SREG = r23
-.def rleds = r24 ; --> funciona como contador_numeros_mal_posicionados
-.def vleds = r25 ; --> funciona como contador_numeros_bien_posicionados
+.def rleds = r24 ; funciona como contador de numeros mal posicionados
+.def vleds = r25 ; funciona como contador de numeros bien posicionados
 .def aux_joystick = r30
-.def intentos = r31 ; ESTE CREO Q PODEMOS USAR EL MISMO PARA OTRO
+.def intentos = r31 ; Como no usamos el puntero Z podemos usar estos registros
 
 .dseg
 .org SRAM_START
 TABLA_ELEGIDO: .byte 4
 TABLA_COMPU: .byte 4
 TABLA: .byte 10
-
 
 .cseg
 .org 0X0000
@@ -45,6 +45,7 @@ TABLA: .byte 10
 .org UTXCaddr
 	rjmp int_usart_tx
 
+;Sector de interrupción por TIMER 0
 .org OVF0addr
 	rjmp timer0_anti_rebote
 
@@ -72,44 +73,44 @@ main:
 	; Limpio contadores o cosas en general
 	clr rleds
 	clr vleds
-	ldi flag_e, 0b00000001
+	ldi flag_e, 0b00000001 ; Ponemos el flag en 1 para que entre a etapa de buscando contrincante
 	clr r16
 
 	;Seteo las interrupciones
 	cli
 
 	;Seteo interrupcion por: INT0
-	ldi r16,  0x02 ;por flanco descendente 
+	ldi r16,  0x02 ;Por flanco descendente 
 	sts EICRA, r16
-	ldi r16, 0x01
+	ldi r16, 0x01 ;Activo la interrupción
 	out EIMSK, r16
 
 	;Seteo interrupcion por: USART
 	;Recibo datos y envio
-	ldi r16, 103
+	ldi r16, 12 ;Baudrate de 9600 para un micro de 1MHz
 	sts UBRR0L, r16
 	clr r16
 	sts UBRR0H, r16
-	ldi r16, 0b0010_0010
+	ldi r16, 0b00100010
 	sts UCSR0A, r16 
-	ldi r16, 0b0000_0110
+	ldi r16, 0b00000110
 	sts UCSR0C, r16
-	ldi r16, 0b1101_1000 
+	ldi r16, 0b11011000 
 	sts UCSR0B, r16 
 
 	;Seteo interrupción por timer 0
-	ldi r16, 0b10000000 ; uso modo normal, me baso en overflow
+	ldi r16, 0b10000000 ;Modo normal, me baso en overflow
 	out TCCR0A, r16
 	ldi r16, 0x01
-	sts TIMSK0, r16
+	sts TIMSK0, r16 ;Por interrupción
 	ldi r16, 0x00
 	out TCCR0B, r16 ; Todavía no está prendido el timer 0, porque no seteamos el prescaler
 
-	; Seteo adc
+	;Seteo adc
 	ldi r16, 0b11110111
 	sts ADCSRA, r16 
 	ldi r16, 0x00
-	sts ADCSRB, r16
+	sts ADCSRB, r16 ;Todavía no está convirtiendo
 	ldi r16, 0b01100100 ;ADC4
 	sts ADMUX, r16 
 
@@ -117,6 +118,8 @@ main:
 
 	sei ; Habilito las interrupciones globales
 
+; Loop vicioso que espera las inruupciones de cada etapa, en él, cada vez que se da una interrupción
+; verifica en qué estado está el flag de etapa y entra a dicha etapa.
 chequeo_etapa:
 	sbrc flag_e, 0 
 	rcall eligiendo_contrincante
@@ -127,38 +130,44 @@ chequeo_etapa:
 	rjmp chequeo_etapa
 
 ;------------------------------------------------ETAPA 1: ELIGIENDO CONTRINCANTE----------------------------------------------------------------------
-eligiendo_contrincante:
+	/* En eligiendo etapa se puede tener dos tipos de interrupciones: recibo de datos por puerto serie o por pulsador. 
+	Una vez que se entra a esta etapa se verifica por qué interrupción fue mirando el flag de interrupciones. Si fue por 
+	el del pulsador, se envía una N por puerto serie y se pasa de etapa. Si fue por puerto serie, si se recibe una N salta 
+	de etapa, sino sigue esperando*/
+;-----------------------------------------------------------------------------------------------------------------------------------------------------
+
+eligiendo_contrincante: ;Nos fijamos por qué tipo de interrupción se entró en esta etapa
 	sbrc flag_int, 0
 	rcall push_btm_etapa1
 	sbrc flag_int, 1
 	rcall usart_rx_etapa1
 	ret
 
-usart_rx_etapa1:
+usart_rx_etapa1: ; Si fue por recibo de datos por puerto serie, se fija si es una N 
 	clr flag_int
 	lds r16, UDR0
-	cpi r16, 78 ;Comparo con N
+	cpi r16, 78 ;Comparo con N en ascii 
 	in aux_SREG, SREG
 	sbrc aux_SREG, 1
-	rcall pasar_eligiendo_numero
+	rcall pasar_eligiendo_numero ; Si es una N pasamos a pasar_eligiendo_etapa
 	ret
 
-push_btm_etapa1:
+push_btm_etapa1: ; Si fue por pulsador, se envía una N y pasamos a pasar_eligiendo_etapa
 	clr flag_int
 	ldi r16, 78
 	sts UDR0, r16
 	rcall pasar_eligiendo_numero
 	ret
 
-pasar_eligiendo_numero:
-	clr flag_int
-	ldi flag_e, 0b00000010
-	rcall leds_titilando
-	ldi XL, low(TABLA)
+pasar_eligiendo_numero: ; Antes de volver al loop chequeo_etapa, hacemos los arreglos para pasar de etapa
+	clr flag_int ; Limpiamos el flag de interrupciones por las dudas
+	ldi flag_e, 0b00000010 ; Cambiamos el flag de etapa a eligiendo numero 
+	rcall leds_titilando ; Hacemos que los leds titilen 3 veces para indicar que sepasa de etapa
+	ldi XL, low(TABLA) ; Preparamos las tabla que se van a usar en las siguientes tablas
 	ldi XH, high(TABLA)
 	ldi YL, LOW(TABLA_ELEGIDO)
 	ldi YH, HIGH(TABLA_ELEGIDO)
-	rcall limpiar_tabla
+	rcall limpiar_tabla ; Limpiamos la tabla y los registros a utilizar 
 	clr aux_joystick
 	clr vleds
 	clr aux_SREG
@@ -168,7 +177,11 @@ pasar_eligiendo_numero:
 	clr rleds
 	ret
 
-;---------------------------------------------------------ETAPA 2: ELIGIENDO NUMERO--------------------------------------------
+;------------------------------------------------ETAPA 2: ELIGIENDO NUMERO----------------------------------------------------
+/*
+*/
+;------------------------------------------------------------------------------------------------------------------------------
+
 eligiendo_numero:
 	rcall iniciar_adc
 	rcall movimiento_joystick
@@ -178,8 +191,8 @@ eligiendo_numero:
 	rcall decremento
 	sbrc flag_int, 0
 	rcall elige_numero
-	out PORTC, rleds
-	out PORTB, vleds
+	out PORTB, rleds
+	out PORTC, vleds
 	ret
 
 iniciar_adc: ; Seteo adc
@@ -215,8 +228,8 @@ elige_numero:
 	rcall pasar_juego
 	sbrc flag_e, 2
 	rjmp chequeo_etapa
-	out PORTC, rleds
-	out PORTB, vleds
+	out PORTB, rleds
+	out PORTC, vleds
 	ret
 	
 
@@ -236,7 +249,7 @@ movimiento_joystick:
 	ldi flag_int, 0b00010000
 	ldi r16, 0b11110111
 	sts ADCSRA, r16 
-	out PORTB, vleds
+	out PORTC, vleds
 	ret
 
 incremento:
@@ -296,7 +309,7 @@ pasar_juego:
 	clr rleds
 	clr r16
 	clr aux_joystick
-	out PORTC, r16
+	out PORTB, r16
 	ret
 
 deshabilitar_adc:
@@ -309,24 +322,32 @@ enviar_j:
 	ret
 
 ;-----------------------------------------------ETAPA 3: JUEGO-----------------------------------------------------------
-juego:
+	/*En esta etapa tenemso tabién dos tipos de interrupciones, por pulsador y por recibo de datos por puerto serie
+	Si es por pulsador, hay que ver si ganó el usuario. Si ya ganó, se manda una R por puerto serie y se pasa de etapa.
+	Si no ganó no hacemos nada. Por otro lado, se puede recibir datos por puerto serie, tanto para recibir números 
+	como para terminar el juego si, una vez que ya ganó el usuario envía una R.*/
+;------------------------------------------------------------------------------------------------------------------------
+
+juego: ;Nos fijamos por qué tipo de interrupción se entró en esta etapa
 	sbrc flag_int, 0
 	rcall push_btm_juego
 	sbrc flag_int, 1
 	rcall recibi_dato
 	ret
 
-; Acá tengo que comprobar que si terminó el juego recien ahi tiene q volver, sino me chupa un huevo el botón
+; Si se presiona el pulsador antes de que el usuario gane no lo tenemos en cuenta
 push_btm_juego:
-	cpi vleds, 4
+	cpi vleds, 4 ; Verificamos si el jugador ya ganó, esto es cuando tiene los cuatro dígitos bien posicionados
 	in aux_SREG, SREG
 	sbrs aux_SREG, 1
 	rjmp retorno_push_btm_juego
-	rcall paso_etapa1
+	rcall paso_etapa1 ; Solamente se pasa de etapa cuando al pulsar el botón el jugador ya ganó
 retorno_push_btm_juego:
 	clr flag_int
 	ret
 
+; La otra interrupción puede ser por recibo de datos. Si el usuario ya ganó, solo interesa saber si se envía una R
+; para pasar a termino_juego. 
 recibi_dato:
 	lds num_compu, UDR0
 	clr flag_int
@@ -334,41 +355,40 @@ recibi_dato:
 	in aux_SREG, SREG
 	sbrc aux_SREG, 1
 	rjmp termino_juego
-	subi num_compu, '0'
+	subi num_compu, '0' ; Si el jugador no ganó, se convierte de ASCII a número, y se guarda en la tabla
 	st X+, num_compu
 	inc contador_tabla_compu
 	cpi contador_tabla_compu, 4
 	in aux_SREG, SREG
 	sbrc aux_SREG, 1
-	rcall numero_completo
+	rcall numero_completo ; Una vez que se reciben los cuatro números, pasamos a numero_completo
 retorno_recibi_dato:
 	ret
 
-
-termino_juego:
+termino_juego: ; Verificamos si una vez que ganamos se recibe una R
 	cpi num_compu, 0x52 ; R en ascii
 	in aux_SREG, SREG
 	sbrs aux_SREG, 1
 	rjmp retorno_recibi_dato2
-	rcall paso_etapa1
+	rcall paso_etapa1 ; Si se recibió la R pasamos a paso_etapa1
 retorno_recibi_dato2:
 	ret
 
-; Compruebo que sea todo numeros ascii:
+; Una vez que tenemos los cuatro números miramos si son válidos
 numero_completo:
-	ldi XL, LOW(TABLA_COMPU)
+	ldi XL, LOW(TABLA_COMPU) 
 	ldi XH, HIGH(TABLA_COMPU)
 	ldi contador_tabla_compu, 0
 loop_verifico_ascii:
 	ld num_compu, X+
-	cpi num_compu, 0 ; 48 es el ascii para el
+	cpi num_compu, 0 ; Verificamos si es menor a cero, no es número
 	in aux_SREG, SREG
 	sbrc aux_SREG, 0
-	ldi r16, 0x01
-	cpi num_compu, 10 ; 58 es el ascii para el :, que va despues del 9
+	ldi r16, 0x01 ;Si no es número guardamos un 1 en r16 para verificar después
+	cpi num_compu, 10 ; Verificamos si es mayor/igual a 10, no es número
 	in aux_SREG, SREG
 	sbrs aux_SREG, 0
-	ldi r16, 0x01
+	ldi r16, 0x01 ;Si no es número guardamos un 1 en r16 para verificar después
 	inc contador_tabla_compu
 	cpi contador_tabla_compu, 4
 	in aux_SREG, SREG
@@ -377,12 +397,12 @@ loop_verifico_ascii:
 	rjmp loop_verifico_ascii
 
 chequeo_si_es_numero:
-	cpi r16, 0x01 ; si esta clear es un numero
-	brne todos_numeros
+	cpi r16, 0x01 ; Si está en 1, significa que alguno de los datos recibidos no es un número
+	brne todos_numeros ; Si son todos números, ya podemos empezar a comparar dígito a dígito
 	clr r16
 	ldi XL, LOW(TABLA_COMPU)
 	ldi XH, HIGH(TABLA_COMPU)
-	clr contador_tabla_compu
+	clr contador_tabla_compu ; Si no es número, volvemos a esperar datos y no se hace nada
 	ret
 
 todos_numeros:
@@ -391,53 +411,51 @@ todos_numeros:
 	clr contador_tabla_compu ; Cargo contador de la tabla que llega desde la compu para poder ir moviendome
 	clr vleds
 	clr rleds
-loop_comparar_numeros:
+loop_comparar_numeros: ; Comienzo la comparación
 	ld num_compu, X+ ; Muevo una posición de la tabla de numero que entra por la compu
 	inc contador_tabla_compu
 	ldi contador_tabla_elegido, 0 ; Cargo contador de la tabla del numero elegido para poder ir moviendome
 loop_tabla_elegido:
 	ld num_elegido, Y+ ; Muevo una posición de la tabla de numero elegido 
 	inc contador_tabla_elegido
-	cp num_compu, num_elegido 
-	breq numeros_iguales 
-	cpi contador_tabla_elegido, 4
+	cp num_compu, num_elegido ; Comparo los números de ambas tablas
+	breq numeros_iguales  ; Si son iguales salto a numero_iguales
+	cpi contador_tabla_elegido, 4 ; Si el contador de la tabla Y llegó a 4, es porque se terminó y salto a termino_tabla_y
 	breq termino_tabla_y
-	rjmp loop_tabla_elegido
+	rjmp loop_tabla_elegido ; Si no terminó la tabla y y no encontré números iguales, sigo recorriendo la tabla y
 termino_tabla_y:
-	; Reinicio el puntero Y
 	cpi contador_tabla_compu, 4
-	breq termino_tabla_x
-	ldi YL, LOW(TABLA_ELEGIDO)
+	breq termino_tabla_x ; Si el contador de la tabla X llegó a 4, salto a termino_tabla_x
+	ldi YL, LOW(TABLA_ELEGIDO) ; Reinicio el puntero Y
 	ldi YH, HIGH(TABLA_ELEGIDO)
-	rjmp loop_comparar_numeros
+	rjmp loop_comparar_numeros ; Si no terminó la tabla X y se terminó la tabla y, sigo reccoriendo la tabla X y la tabla Y
 numeros_iguales:
-	cp contador_tabla_compu, contador_tabla_elegido
+	cp contador_tabla_compu, contador_tabla_elegido ; Si los números son iguales, veo si están en la misma posición
 	in aux_SREG, SREG
 	sbrs aux_SREG, 1
-	inc rleds
+	inc rleds ; Si no están en la misma posición, incremento el contador rleds
 	sbrc aux_SREG, 1
-	inc vleds
+	inc vleds ; Si están en la misma posición incremento el contador vleds
 	cpi contador_tabla_compu, 4
-	breq termino_tabla_x
+	breq termino_tabla_x ; Si se terminó la tabla X, salto a termino_tabla_x
 	ldi YL, LOW(TABLA_ELEGIDO)
 	ldi YH, HIGH(TABLA_ELEGIDO)
 	rjmp loop_comparar_numeros
 termino_tabla_x:
 	inc intentos ; Incremento el contador de intentos 
-	; Veo si ya se terminó el juego
 	cpi vleds, 0b00000100
-	breq gano
-	andi vleds, 0b00001111
+	breq gano ; Si el vleds llegó a 4 es porque ya ganó
+	andi vleds, 0b00001111 ; Si no ganó muestro el contador de números correctos y bien posicionados y números correctos pero mal posicionados
 	andi rleds, 0b00001111
-	out PORTB, vleds
-	out PORTC, rleds
-	rjmp retorno_comparo_numeros
+	out PORTC, vleds
+	out PORTB, rleds
+	rjmp retorno_comparo_numeros ; Salto a retorno_comparo_numeros que vuelve a esperar recibir datos. Esto se hace hasta que el jugador gana
 gano: 
-	andi vleds, 0b00001111
+	andi vleds, 0b00001111 ; Si ya ganó, se prenden todos los leds verdes 
 	ldi aux_joystick, 0x0f
-	out PORTB, aux_joystick
-	out PORTC, intentos
-retorno_comparo_numeros:
+	out PORTC, aux_joystick
+	out PORTB, intentos ; Por los leds rojos se saca la cantidad de intentos
+retorno_comparo_numeros: ; Vuelvo a apuntar las tablas una vez que terminaron las comparaciones
 	ldi XL, LOW(TABLA_COMPU)
 	ldi XH, HIGH(TABLA_COMPU)
 	ldi YL, LOW(TABLA_ELEGIDO)
@@ -447,9 +465,9 @@ retorno_comparo_numeros:
 	clr r16
 	ret
 
-paso_etapa1:
-	ldi flag_e, 0b00000001
-	clr vleds
+paso_etapa1: ; Para pasar de etapa cuando se recibe una R o se pulsa el botón una vez que ya ganó el jugador 
+	ldi flag_e, 0b00000001 ; Pongo el flag de etapa en 1, etapa buscando contrincante
+	clr vleds ; Limipio todos los registros
 	clr rleds
 	clr r16
 	clr contador_tabla_elegido
@@ -459,12 +477,15 @@ paso_etapa1:
 	clr aux_SREG
 	clr aux_joystick
 	clr intentos
-	rcall leds_titilando
-	out PORTC, vleds
-	out PORTB, rleds
+	rcall leds_titilando ; Llamo a leds titilando para indicar que se pasó de etapa
+	out PORTB, vleds ; Dejo apagados los leds
+	out PORTC, rleds
 	ret
 
 ;-------------------------------------------------------------FUNCIONES AUXILIARES-----------------------------------------------------------
+	/*Funciones que se usan varias veces en el código*/
+;--------------------------------------------------------------------------------------------------------------------------------------------
+
 leds_titilando:
 	ldi r16, 0x00
 	out PORTC, r16
@@ -496,10 +517,8 @@ toggle_leds:
 	rjmp toggle_leds; haciendo con toggle
 fin_timer:
 	clr r16
-	;Probando porq no funciona bien
 	clr vleds
 	clr rleds
-	; aca termina la prueba
 	sts TCCR1B, r16
 	out PORTC, r16
 	out PORTB, r16
@@ -542,24 +561,26 @@ limpiar_tabla:
 	ret
 
 ;---------------------------------------------------------------INTERRUPCIONES---------------------------------------------------------
+	/*Acá se dan todas las interrupciones, en cada una de ellas ponemos el flag de interrupciones en el número que corresponde
+	según los números que le indicamos. En el pulsador, tenemos que tener en cuneta el antirrebote.*/
+;--------------------------------------------------------------------------------------------------------------------------------------
 int0_push_btm:
 	ldi r16, 0b00000101
-	out TCCR0B, r16 ; Al setear acá el TCCR0B prendo el clock del timer 0 para el delay
-	reti
+	out TCCR0B, r16 ; Al setear acá el TCCR0B prendo el clock del timer 0 para el antirrebote
+	reti ; Se espera que la siguiente interrupción sea la del timer 0
 
-;SOLO LO NECESITAMOS PARA INT0 
 timer0_anti_rebote:
-	sbic PIND, 2
+	sbic PIND, 2 ; Verifico que siga en el estado que queremos, es decir cuando es un corto a tierra
 	rjmp timer0_apagar
-	ldi flag_int, 0b00000001
+	ldi flag_int, 0b00000001 ; Si es un corto a tierra, prendemos el flag de interrupciones por botón
 timer0_apagar:
 	ldi r16, 0x00
-	out TCCR0B, r16
+	out TCCR0B, r16 ; Apagamos el timer 0 para que no siga saltando por interrupciones
 	reti
 
 int_usart_rx:
-	ldi flag_int, 0b00000010
+	ldi flag_int, 0b00000010 ; Si se recibe un dato por puerto serie se prende el flag de interrupciones correspondiente
 	reti
 
-int_usart_tx:
+int_usart_tx: ; Dejamos la interrupcion de envío de datos
 	reti
