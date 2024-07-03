@@ -178,13 +178,23 @@ pasar_eligiendo_numero: ; Antes de volver al loop chequeo_etapa, hacemos los arr
 	ret
 
 ;------------------------------------------------ETAPA 2: ELIGIENDO NUMERO----------------------------------------------------
-/*
+/* En etapa eligiendo numero se activa el conversor ADC el cuaal convierte en todo momento, en el caso de sobrepasar un limite
+impuesto se considerara que el usuario realizo un incremento y se activara el bit de incremento en el flag_int. De form analoga
+para el decremento, se vera que al pasar un limite inferior se considerara que el usuario realizo un decremento y se actiavara 
+el bit de decremento en el flag_int. De no ser un incremento o decremento no se hace nada.
+En esta etapa solo se puede recibir interrupciones por INT0, cuando el usuario utilice el push-btm se seteara el bit de interrupcion
+por push-btm en flg_int y al estar seteado el bit de etapa eligiendo numero en flag_e podemos identificar que se trata de la eleccion
+de un numero, por lo que se guarda el numero guardado en el contador y se guarda en TABLA_ELEGIDO y a su vez colocamos un 1 en una tabla
+auxiliar para, de esta forma, no obtener la opcion de legir un mismo numero dos veces.
+Una vez que se termina de elegir los 4 digitos, se limpia la tabla auxiliar para luego usarla en la siguiente etapa y seteamos
+en flag_e el bit de la etapa juego.
+ADVERTENCIA: en esta etapa num_elegido esta cargado en 0 para utilizarlo en las sumas y restas
 */
 ;------------------------------------------------------------------------------------------------------------------------------
 
 eligiendo_numero:
-	rcall iniciar_adc
-	rcall movimiento_joystick
+	rcall iniciar_adc 
+	rcall movimiento_joystick ;En esta rutina se activan los flags de incremento o decremento 
 	sbrc flag_int, 3 
 	rcall incremento
 	sbrc flag_int, 4
@@ -196,7 +206,7 @@ eligiendo_numero:
 	ret
 
 iniciar_adc: ; Seteo adc
-	ldi r16, 0b11110111
+	ldi r16, 0b11110111 ;Seteo ADIE en 0, de esta forma convierte sin llamr a una interrupcion
 	sts ADCSRA, r16 
 	ldi r16, 0x00
 	sts ADCSRB, r16
@@ -205,7 +215,7 @@ iniciar_adc: ; Seteo adc
 	ret
 
 elige_numero:
-	rcall deshabilitar_adc
+	rcall deshabilitar_adc ; Al elegir un numero deshabilito el ADC
 	clr flag_int
 	cpi contador_tabla_elegido, 0
 	in aux_SREG, SREG
@@ -213,81 +223,81 @@ elige_numero:
 	inc rleds
 	sbrs aux_SREG, 1
 	lsl rleds
-	st Y+, vleds
+	st Y+, vleds ;guardo el numero actual en tabla TABLA_ELEGIDO
 	ldi r16, 1
 	clc 
 	add XL, vleds
 	adc XH, num_elegido 
-	st X, r16
+	st X, r16 ; cargo un 1 en la posicion del numero elegido
 	ldi XL, LOW(TABLA)
 	ldi XH, HIGH(TABLA)
 	inc contador_tabla_elegido
-	cpi contador_tabla_elegido, 4
+	cpi contador_tabla_elegido, 4 ;Veo si es el ultimo digito
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	rcall pasar_juego
-	sbrc flag_e, 2
+	rcall pasar_juego ;Si es el ultimo digito, la rutina pasar_juego setea todo para para a dicha etapa
+	sbrc flag_e, 2 ; en el caso de que se haya habilitado el flag_e para etapa juego, saltamos a chequeo_etapa
 	rjmp chequeo_etapa
-	out PORTB, rleds
-	out PORTC, vleds
+	out PORTB, rleds ; Muestro el digito actual
+	out PORTC, vleds ; Muestro el numero elegido
 	ret
 	
 
 movimiento_joystick:
 	lds r16, ADCSRA
-	sbrs r16, 4
+	sbrs r16, 4 ;Espero hasta que la conversion se complete verificando ADIF
 	rjmp movimiento_joystick
-	lds aux_joystick, ADCH ;Valor del joystick
+	lds aux_joystick, ADCH ;Cargo el valor leido
 	rcall delay
-	cpi aux_joystick, 0b11110000
+	cpi aux_joystick, 0b11110000 ;Comparo si es un decremento
 	in aux_SREG, sreg
 	sbrs aux_SREG, 0
-	ldi flag_int, 0b00001000
-	cpi aux_joystick, 0b00001111
+	ldi flag_int, 0b00001000 ;En el caso de ser decremento, activo el flag
+	cpi aux_joystick, 0b00001111 ;Comparo si es un incremento
 	in aux_SREG, sreg
 	sbrc aux_SREG, 0
-	ldi flag_int, 0b00010000
-	ldi r16, 0b11110111
+	ldi flag_int, 0b00010000 ; En el caso de ser incremento, activo el flag
+	ldi r16, 0b11110111 
 	sts ADCSRA, r16 
-	out PORTC, vleds
+	out PORTC, vleds 
 	ret
 
 incremento:
 	clr flag_int
-	inc vleds
-	cpi vleds, 10
+	inc vleds ; Incremento el numero
+	cpi vleds, 10 ;Comparo si llego a 10, en ese caso paso a 0
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	ldi vleds, 0
 	clc
-	add XL, vleds
-	adc XH, num_elegido
-	ld r16, X
+	add XL, vleds ;Me muevo en TABLA hsta la posicion del numero actual
+	adc XH, num_elegido 
+	ld r16, X ;cargo en un auxiliar
 	ldi XL, LOW(TABLA)
 	ldi XH, HIGH(TABLA)
-	cpi r16, 1
+	cpi r16, 1 ; Si es igual a 1 signific que el numero ya fue elegido
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	rjmp incremento
+	rjmp incremento ;Si ya fue elegido, sigo avazando 
 	ret
 
 decremento:
 	clr flag_int
 	dec vleds
-	cpi vleds, 0
+	cpi vleds, 0 ;Comparo si llego a 0, en ese caso paso a 10
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	ldi vleds, 10
 	clc
-	add XL, vleds
+	add XL, vleds ;Me muevo en TABLA hasta la posicion del numero actual
 	adc XH, num_elegido
-	ld r16, X
+	ld r16, X ; cargo en un auxiliar
 	ldi XL, LOW(TABLA)
 	ldi XH, HIGH(TABLA)
-	cpi r16, 1
+	cpi r16, 1 ; Comparo si es 1
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	rjmp decremento
+	rjmp decremento ; Si es 1 indic que ya fue elegido, por lo que sigo incremento vleds
 	ret
 
 
@@ -295,13 +305,13 @@ pasar_juego:
 	ldi flag_e, 0b00000100
 	clr flag_int
 	rcall leds_titilando
-	rcall enviar_j
-	rcall deshabilitar_adc
-	ldi XL, low(TABLA_COMPU)
+	rcall enviar_j ;Envio una j a la terminal
+	rcall deshabilitar_adc ;Deshabilito ADC
+	ldi XL, low(TABLA_COMPU) ;inicializo las correspondientes tablas de etapa juego
 	ldi XH, high(TABLA_COMPU)
 	ldi YL, LOW(TABLA_ELEGIDO)
 	ldi YH, HIGH(TABLA_ELEGIDO)
-	clr contador_tabla_elegido
+	clr contador_tabla_elegido ;Limpio registros usados en etapa eligiendo numero
 	clr contador_tabla_compu
 	clr num_elegido
 	clr num_compu
@@ -309,7 +319,7 @@ pasar_juego:
 	clr rleds
 	clr r16
 	clr aux_joystick
-	out PORTB, r16
+	out PORTB, r16 
 	ret
 
 deshabilitar_adc:
