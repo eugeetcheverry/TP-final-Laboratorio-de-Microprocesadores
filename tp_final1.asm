@@ -11,7 +11,6 @@
 ;c = usart tx
 ;d = adc_inc
 ;e = adc_dec
-;f = timer
 
 ; Definimos registros 
 .def contador_tabla_elegido = r19 ;
@@ -284,7 +283,7 @@ incremento:
 decremento:
 	clr flag_int
 	dec vleds
-	cpi vleds, 0 ;Comparo si llego a 0, en ese caso paso a 10
+	cpi vleds, 0xff ;Comparo si llego a 0, en ese caso paso a 10
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
 	ldi vleds, 9
