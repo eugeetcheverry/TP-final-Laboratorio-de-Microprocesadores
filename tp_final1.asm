@@ -503,26 +503,26 @@ leds_titilando:
 	;ldi r16, 0b10000000
 	ldi r16, 0x00
 	sts TCCR1A, r16
-	ldi r16, 0x01 ;para una frecuencia de 2hz
-	sts OCR1AH, r16
-	ldi r16, 0b11101001 ;para una frecuencia de 2hz
-	sts OCR1AL, r16
+	ldi r16, 0x01 ;para una frecuencia de 2hz -> 0.5ms
+	sts OCR1AH, r16 ; Tengo un top de 489hz -> high(0000 0001)
+	ldi r16, 0b11101001 ;
+	sts OCR1AL, r16; Tengo un top de 489hz -> low(1110 1001)
 	clr r16
 	sts TIMSK1, r16 ; TIFR1 1
 	sei
-	ldi rleds, 6
+	ldi rleds, 6 ;Como llega al top cada 0.5ms, repito 6 veces para que dure 3s
 	ldi vleds, 0b00001111
 	ldi r16, 0b00001101
-	sts TCCR1B, r16
+	sts TCCR1B, r16 
 toggle_leds:
-	sbis TIFR1, 1
+	sbis TIFR1, 1 ;Espero a que llegue al top
 	rjmp toggle_leds
 	dec rleds
-	cpi rleds, 0
+	cpi rleds, 0 ; en el caso de llegar 0, apagmos el timer
 	breq fin_timer
 	out PINC, vleds 
-	out PINB, vleds 
-	sbi TIFR1, 1
+	out PINB, vleds   
+	sbi TIFR1, 1 ;Seteo en 1 el OCF1A para limpiarlo
 	rjmp toggle_leds; haciendo con toggle
 fin_timer:
 	clr r16
@@ -533,25 +533,25 @@ fin_timer:
 	out PORTB, r16
 	ret
 
-delay: ; dely de 30ms
+delay: ; como resulta de 3.8Hz (tener en cuenta que trabajamos con f_clock 1MHz)
 	cli
-	ldi intentos, 0b00000010
+	ldi intentos, 0b00000010 ; configurado en ctc
 	sts TCCR2A, intentos
-	ldi intentos, 255 
+	ldi intentos, 255 ; top utilizado 
 	sts OCR2A, intentos
 	clr intentos
 	sts TIMSK2, intentos ; TIFR1 1
 	sei
-	ldi intentos, 0b00000111
+	ldi intentos, 0b00000111 ;prescaler en 1024
 	sts TCCR2B, intentos
 	ldi intentos, 2
 loop_delay:
-	sbis TIFR2, 1
+	sbis TIFR2, 1 ; espero a que llegue al top
 	rjmp loop_delay
 	dec intentos
 	cpi intentos, 0
 	breq fin_delay
-	sbi TIFR2, 1
+	sbi TIFR2, 1 ;Limpio OCF2A
 	rjmp loop_delay
 fin_delay:
 	clr intentos
