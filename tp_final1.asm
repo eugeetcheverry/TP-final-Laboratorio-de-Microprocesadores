@@ -287,7 +287,7 @@ decremento:
 	cpi vleds, 0 ;Comparo si llego a 0, en ese caso paso a 10
 	in aux_SREG, sreg
 	sbrc aux_SREG, 1
-	ldi vleds, 10
+	ldi vleds, 9
 	clc
 	add XL, vleds ;Me muevo en TABLA hasta la posicion del numero actual
 	adc XH, num_elegido
