@@ -1,0 +1,1 @@
+Este proyecto consiste en un juego interactivo desarrollado en lenguaje Assembly, en el cual la computadora selecciona un número aleatorio de 4 dígitos. El usuario debe adivinarlo utilizando un joystick y observando el resultado en LEDs conectados a través de comunicación UART con un microprocesador.
